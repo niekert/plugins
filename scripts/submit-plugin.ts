@@ -4,23 +4,26 @@
  * Plugin Submission Script
  *
  * Builds, packs, and submits a plugin to the Framer marketplace.
+ * Automatically generates changelog from git diff using AI.
  *
  * Usage: yarn tsx scripts/submit-plugin.ts
  *
  * Environment Variables:
  *   PLUGIN_PATH         - Path to the plugin directory (required)
- *   CHANGELOG           - Changelog text for this version (required)
+ *   CHANGELOG           - Changelog text (optional - if empty, generates with AI)
+ *   OPENROUTER_API_KEY  - OpenRouter API key for changelog generation (required if CHANGELOG is empty)
  *   SESSION_TOKEN       - Framer session cookie (required unless DRY_RUN)
  *   FRAMER_ADMIN_SECRET - Framer admin API key (required unless DRY_RUN)
  *   SLACK_WEBHOOK_URL   - Slack webhook for notifications (optional)
  *   CREATORS_API_BASE   - API base URL (default: https://creators.framer.com)
  *   DRY_RUN             - Skip submission and tagging when "true" (optional)
- *   GITHUB_TOKEN        - For creating git tags (optional)
+ *   OPENROUTER_MODEL    - Model to use (default: anthropic/claude-sonnet-4)
  */
 
 import { execSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
-import { join, resolve } from "node:path"
+import { join, resolve, basename } from "node:path"
+import OpenAI from "openai"
 
 // ============================================================================
 // Types
@@ -55,13 +58,14 @@ interface SubmissionResponse {
 
 interface Config {
     pluginPath: string
-    changelog: string
+    changelog: string | undefined
     sessionToken: string | undefined
     framerAdminSecret: string | undefined
     slackWebhookUrl: string | undefined
     creatorsApiBase: string
     dryRun: boolean
-    githubToken: string | undefined
+    openrouterApiKey: string | undefined
+    openrouterModel: string
 }
 
 // ============================================================================
@@ -81,18 +85,23 @@ const log = {
 
 function getConfig(): Config {
     const pluginPath = process.env.PLUGIN_PATH
-    const changelog = process.env.CHANGELOG
+    const changelog = process.env.CHANGELOG?.trim() || undefined
     const sessionToken = process.env.SESSION_TOKEN
     const framerAdminSecret = process.env.FRAMER_ADMIN_SECRET
     const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL
     const creatorsApiBase = process.env.CREATORS_API_BASE || "https://creators.framer.com"
     const dryRun = process.env.DRY_RUN === "true"
-    const githubToken = process.env.GITHUB_TOKEN
+    const openrouterApiKey = process.env.OPENROUTER_API_KEY
+    const openrouterModel = process.env.OPENROUTER_MODEL || "anthropic/claude-sonnet-4"
 
     const missing: string[] = []
 
     if (!pluginPath) missing.push("PLUGIN_PATH")
-    if (!changelog) missing.push("CHANGELOG")
+
+    // Only require OpenRouter API key if changelog is not provided
+    if (!changelog && !openrouterApiKey) {
+        missing.push("OPENROUTER_API_KEY (required when CHANGELOG is empty)")
+    }
 
     if (!dryRun) {
         if (!sessionToken) missing.push("SESSION_TOKEN")
@@ -105,14 +114,171 @@ function getConfig(): Config {
 
     return {
         pluginPath: resolve(pluginPath!),
-        changelog: changelog!,
+        changelog,
         sessionToken,
         framerAdminSecret,
         slackWebhookUrl,
         creatorsApiBase,
         dryRun,
-        githubToken,
+        openrouterApiKey,
+        openrouterModel,
     }
+}
+
+// ============================================================================
+// Git Operations
+// ============================================================================
+
+function getLastTagForPlugin(pluginName: string, repoRoot: string): string | null {
+    const tagPrefix = `${pluginName.toLowerCase().replace(/\s+/g, "-")}-v`
+
+    try {
+        // Get all tags matching the plugin prefix, sorted by version
+        const tags = execSync(`git tag -l "${tagPrefix}*" --sort=-v:refname`, {
+            cwd: repoRoot,
+            encoding: "utf-8",
+        })
+            .trim()
+            .split("\n")
+            .filter(Boolean)
+
+        if (tags.length === 0) {
+            return null
+        }
+
+        log.info(`Found ${tags.length} existing tag(s) for ${pluginName}`)
+        log.info(`Latest tag: ${tags[0]}`)
+
+        return tags[0]
+    } catch {
+        return null
+    }
+}
+
+function getGitDiff(pluginPath: string, sinceTag: string | null, repoRoot: string): string {
+    const relativePath = pluginPath.replace(repoRoot + "/", "")
+
+    try {
+        let diff: string
+
+        if (sinceTag) {
+            // Diff since last tag
+            diff = execSync(`git diff ${sinceTag}..HEAD -- "${relativePath}"`, {
+                cwd: repoRoot,
+                encoding: "utf-8",
+                maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large diffs
+            })
+        } else {
+            // No previous tag - get all commits for this plugin
+            // Use the first commit that touched this directory
+            const firstCommit = execSync(
+                `git log --oneline --diff-filter=A -- "${relativePath}" | tail -1 | cut -d' ' -f1`,
+                {
+                    cwd: repoRoot,
+                    encoding: "utf-8",
+                }
+            ).trim()
+
+            if (firstCommit) {
+                diff = execSync(`git diff ${firstCommit}^..HEAD -- "${relativePath}"`, {
+                    cwd: repoRoot,
+                    encoding: "utf-8",
+                    maxBuffer: 10 * 1024 * 1024,
+                })
+            } else {
+                // Fallback: just show current state
+                diff = execSync(`git diff --no-index /dev/null "${relativePath}" || true`, {
+                    cwd: repoRoot,
+                    encoding: "utf-8",
+                    maxBuffer: 10 * 1024 * 1024,
+                })
+            }
+        }
+
+        return diff.trim()
+    } catch (error) {
+        throw new Error(`Failed to get git diff: ${error instanceof Error ? error.message : String(error)}`)
+    }
+}
+
+function getCommitMessages(pluginPath: string, sinceTag: string | null, repoRoot: string): string {
+    const relativePath = pluginPath.replace(repoRoot + "/", "")
+
+    try {
+        let messages: string
+
+        if (sinceTag) {
+            messages = execSync(`git log ${sinceTag}..HEAD --oneline -- "${relativePath}"`, {
+                cwd: repoRoot,
+                encoding: "utf-8",
+            })
+        } else {
+            messages = execSync(`git log --oneline -- "${relativePath}"`, {
+                cwd: repoRoot,
+                encoding: "utf-8",
+            })
+        }
+
+        return messages.trim()
+    } catch {
+        return ""
+    }
+}
+
+// ============================================================================
+// AI Changelog Generation
+// ============================================================================
+
+async function generateChangelog(
+    pluginName: string,
+    diff: string,
+    commitMessages: string,
+    config: Config
+): Promise<string> {
+    const openai = new OpenAI({
+        apiKey: config.openrouterApiKey,
+        baseURL: "https://openrouter.ai/api/v1",
+    })
+
+    // Truncate diff if too large (keep first 50k chars)
+    const maxDiffLength = 50000
+    const truncatedDiff = diff.length > maxDiffLength ? diff.slice(0, maxDiffLength) + "\n\n[... diff truncated ...]" : diff
+
+    const prompt = `Generate a concise, user-facing changelog for a Framer plugin called "${pluginName}".
+
+Based on the following git diff and commit messages, create a changelog that:
+- Uses bullet points (- )
+- Focuses on features, fixes, and improvements users care about
+- Avoids technical implementation details
+- Is written in past tense ("Added", "Fixed", "Improved")
+- Groups related changes together
+- Is concise (ideally 3-7 bullet points)
+
+If the changes are minimal or only internal, still provide at least one user-facing summary.
+
+Commit messages:
+${commitMessages || "(no commit messages)"}
+
+Git diff:
+${truncatedDiff || "(no diff available)"}
+
+Respond with ONLY the changelog bullet points, no other text.`
+
+    log.info(`Generating changelog with ${config.openrouterModel}...`)
+
+    const response = await openai.chat.completions.create({
+        model: config.openrouterModel,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 1000,
+    })
+
+    const changelog = response.choices[0]?.message?.content?.trim()
+
+    if (!changelog) {
+        throw new Error("Failed to generate changelog: empty response from AI")
+    }
+
+    return changelog
 }
 
 // ============================================================================
@@ -241,8 +407,9 @@ function createGitTag(pluginName: string, version: string, changelog: string, re
     log.info(`Creating git tag: ${tagName}`)
 
     try {
-        // Create annotated tag
-        execSync(`git tag -a "${tagName}" -m "${changelog.replace(/"/g, '\\"')}"`, {
+        // Create annotated tag with changelog as message
+        const escapedChangelog = changelog.replace(/'/g, "'\\''")
+        execSync(`git tag -a "${tagName}" -m '${escapedChangelog}'`, {
             cwd: repoRoot,
             stdio: "inherit",
         })
@@ -353,7 +520,9 @@ async function main(): Promise<void> {
 
     let config: Config
     let pluginInfo: PluginInfo
-    const repoRoot = resolve(__dirname, "..")
+    let changelog: string = ""
+    // REPO_ROOT can be overridden when script is run from a different repo
+    const repoRoot = process.env.REPO_ROOT || resolve(__dirname, "..")
 
     try {
         // 1. Load configuration
@@ -362,55 +531,87 @@ async function main(): Promise<void> {
         log.info(`Plugin path: ${config.pluginPath}`)
         log.info(`API base: ${config.creatorsApiBase}`)
         log.info(`Dry run: ${config.dryRun}`)
-        log.info(`Changelog:\n${config.changelog}`)
+        log.info(`AI model: ${config.openrouterModel}`)
 
-        // 2. Load plugin info
+        // 2. Validate plugin path exists
+        if (!existsSync(config.pluginPath)) {
+            throw new Error(`Plugin path does not exist: ${config.pluginPath}`)
+        }
+
+        // 3. Load plugin info
         log.step("Loading Plugin Info")
         pluginInfo = loadPluginInfo(config.pluginPath)
         log.info(`Name: ${pluginInfo.name}`)
         log.info(`ID: ${pluginInfo.id}`)
         log.info(`Workspace: ${pluginInfo.workspaceName}`)
 
-        // 3. Validate plugin path exists
-        if (!existsSync(config.pluginPath)) {
-            throw new Error(`Plugin path does not exist: ${config.pluginPath}`)
+        // 4. Get or generate changelog
+        if (config.changelog) {
+            log.step("Using Provided Changelog")
+            changelog = config.changelog
+            log.info(`Changelog:\n${changelog}`)
+        } else {
+            log.step("Analyzing Changes")
+            const lastTag = getLastTagForPlugin(pluginInfo.name, repoRoot)
+
+            if (lastTag) {
+                log.info(`Last release: ${lastTag}`)
+            } else {
+                log.info("No previous release found - this will be the first version")
+            }
+
+            const diff = getGitDiff(config.pluginPath, lastTag, repoRoot)
+            const commitMessages = getCommitMessages(config.pluginPath, lastTag, repoRoot)
+
+            if (!diff && !commitMessages) {
+                throw new Error("No changes detected since last release. Nothing to submit.")
+            }
+
+            log.info(`Diff size: ${diff.length} chars`)
+            log.info(`Commits: ${commitMessages.split("\n").filter(Boolean).length}`)
+
+            // Generate changelog with AI
+            log.step("Generating Changelog with AI")
+            changelog = await generateChangelog(pluginInfo.name, diff, commitMessages, config)
+            log.info(`Generated changelog:\n${changelog}`)
         }
 
-        // 4. Build the plugin
+        // 6. Build the plugin
         log.step("Building Plugin")
         buildPlugin(pluginInfo.workspaceName, repoRoot)
 
-        // 5. Pack the plugin
+        // 7. Pack the plugin
         log.step("Packing Plugin")
         packPlugin(config.pluginPath)
 
-        // 6. Submit (unless dry run)
+        // 8. Submit (unless dry run)
         let submissionResult: SubmissionResponse | undefined
 
         if (config.dryRun) {
             log.step("DRY RUN - Skipping Submission")
             log.info("Plugin is built and packed. Would submit to API in real run.")
+            log.info(`Would submit with changelog:\n${changelog}`)
         } else {
             log.step("Submitting to Framer API")
-            submissionResult = await submitPlugin(pluginInfo, config.changelog, config)
+            submissionResult = await submitPlugin(pluginInfo, changelog, config)
         }
 
-        // 7. Create git tag (unless dry run)
+        // 9. Create git tag (unless dry run)
         if (config.dryRun) {
             log.step("DRY RUN - Skipping Git Tag")
             log.info("Would create git tag in real run.")
         } else if (submissionResult) {
             log.step("Creating Git Tag")
-            createGitTag(pluginInfo.name, submissionResult.version, config.changelog, repoRoot)
+            createGitTag(pluginInfo.name, submissionResult.version, changelog, repoRoot)
         }
 
-        // 8. Send Slack notification
+        // 10. Send Slack notification
         if (config.slackWebhookUrl) {
             log.step("Sending Slack Notification")
             await sendSlackNotification(
                 config.slackWebhookUrl,
                 pluginInfo,
-                config.changelog,
+                changelog,
                 true,
                 submissionResult?.version,
                 undefined,
@@ -431,7 +632,7 @@ async function main(): Promise<void> {
                 await sendSlackNotification(
                     config!.slackWebhookUrl,
                     pluginInfo! || { id: "unknown", name: "unknown", workspaceName: "unknown", path: "", zipPath: "" },
-                    config!.changelog || "",
+                    changelog || "",
                     false,
                     undefined,
                     errorMessage,

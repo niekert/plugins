@@ -9,8 +9,8 @@ on:
         required: true
         type: string
       changelog:
-        description: 'Changelog for this version'
-        required: true
+        description: 'Changelog (leave empty to auto-generate with AI)'
+        required: false
         type: string
       dry_run:
         description: 'Dry run (skip submission and tagging)'
@@ -26,8 +26,8 @@ on:
         required: true
         type: string
       changelog:
-        description: 'Changelog for this version'
-        required: true
+        description: 'Changelog (leave empty to auto-generate with AI)'
+        required: false
         type: string
       dry_run:
         description: 'Dry run (skip submission and tagging)'
@@ -48,6 +48,9 @@ on:
       SLACK_WEBHOOK_URL:
         description: 'Slack webhook URL for notifications'
         required: false
+      OPENROUTER_API_KEY:
+        description: 'OpenRouter API key for AI changelog generation'
+        required: false
 
 jobs:
   submit:
@@ -57,6 +60,20 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git tags and diff
+
+      # When called from another repo via workflow_call, also checkout this repo for the script
+      - name: Checkout plugins repo (for submit script)
+        if: github.repository != 'framer/plugins'
+        uses: actions/checkout@v4
+        with:
+          repository: framer/plugins
+          path: _plugins-tools
+          sparse-checkout: |
+            scripts
+            package.json
+            yarn.lock
 
       - name: Validate plugin path
         run: |
@@ -83,14 +100,28 @@ jobs:
         env:
           YARN_ENABLE_HARDENED_MODE: 1
 
+      - name: Install plugins-tools dependencies
+        if: github.repository != 'framer/plugins'
+        working-directory: _plugins-tools
+        run: yarn install
+        env:
+          YARN_ENABLE_HARDENED_MODE: 1
+
       - name: Submit plugin
-        run: yarn tsx scripts/submit-plugin.ts
+        run: |
+          if [ -d "_plugins-tools" ]; then
+            cd _plugins-tools && yarn tsx scripts/submit-plugin.ts
+          else
+            yarn tsx scripts/submit-plugin.ts
+          fi
         env:
           PLUGIN_PATH: ${{ github.workspace }}/${{ inputs.plugin_path }}
+          REPO_ROOT: ${{ github.workspace }}
           CHANGELOG: ${{ inputs.changelog }}
           SESSION_TOKEN: ${{ secrets.SESSION_TOKEN }}
           FRAMER_ADMIN_SECRET: ${{ secrets.FRAMER_ADMIN_SECRET }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           CREATORS_API_BASE: ${{ inputs.creators_api_base || vars.CREATORS_API_BASE }}
           DRY_RUN: ${{ inputs.dry_run }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

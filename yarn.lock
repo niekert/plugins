@@ -5973,6 +5973,23 @@ __metadata:
   languageName: node
   linkType: hard
 
+"openai@npm:^6.16.0":
+  version: 6.16.0
+  resolution: "openai@npm:6.16.0"
+  peerDependencies:
+    ws: ^8.18.0
+    zod: ^3.25 || ^4.0
+  peerDependenciesMeta:
+    ws:
+      optional: true
+    zod:
+      optional: true
+  bin:
+    openai: bin/cli
+  checksum: 10/7b6f85a6d096653192b11ffc3055128755baa6d652d32a4640beec92b516309d744fa9f0a923d814f9445ba2d32647dccd4e5749abd56a7643088467bad23383
+  languageName: node
+  linkType: hard
+
 "optionator@npm:^0.9.3":
   version: 0.9.4
   resolution: "optionator@npm:0.9.4"
@@ -6177,6 +6194,7 @@ __metadata:
     "@framer/vite-config": "workspace:*"
     eslint: "npm:^9.35.0"
     jiti: "npm:^2.5.1"
+    openai: "npm:^6.16.0"
     tsx: "npm:^4.19.0"
     turbo: "npm:^2.5.6"
     typescript: "npm:^5.9.2"
