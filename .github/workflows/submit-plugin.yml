@@ -1,0 +1,132 @@
+name: Submit Plugin
+
+on:
+  # Manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      plugin_path:
+        description: 'Plugin directory (e.g., plugins/csv-import)'
+        required: true
+        type: string
+      changelog:
+        description: 'Changelog (leave empty to auto-generate with AI)'
+        required: false
+        type: string
+      environment:
+        description: 'Environment (development/production)'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - production
+      dry_run:
+        description: 'Dry run (skip submission and tagging)'
+        required: false
+        default: false
+        type: boolean
+
+  # Reusable workflow - can be called from other repos (e.g., framer/workshop)
+  workflow_call:
+    inputs:
+      plugin_path:
+        description: 'Plugin directory (e.g., plugins/csv-import)'
+        required: true
+        type: string
+      changelog:
+        description: 'Changelog (leave empty to auto-generate with AI)'
+        required: false
+        type: string
+      environment:
+        description: 'Environment (development/production)'
+        required: true
+        default: 'development'
+        type: string
+      dry_run:
+        description: 'Dry run (skip submission and tagging)'
+        required: false
+        default: false
+        type: boolean
+      creators_api_base:
+        description: 'Override Framer API base URL'
+        required: false
+        type: string
+    secrets:
+      SESSION_TOKEN:
+        description: 'Framer session cookie'
+        required: true
+      FRAMER_ADMIN_SECRET:
+        description: 'Framer admin API key'
+        required: true
+      SLACK_WEBHOOK_URL:
+        description: 'Slack webhook URL for notifications'
+        required: false
+      OPENROUTER_API_KEY:
+        description: 'OpenRouter API key for AI changelog generation'
+        required: false
+
+jobs:
+  submit:
+    name: Submit Plugin
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git tags and diff
+
+      # When called from another repo via workflow_call, also checkout this repo for the script
+      - name: Checkout plugins repo (for submit script)
+        if: github.repository != 'framer/plugins'
+        uses: actions/checkout@v4
+        with:
+          repository: framer/plugins
+          path: _plugins-tools
+          sparse-checkout: |
+            scripts
+            package.json
+            yarn.lock
+
+      - name: Validate plugin path
+        run: |
+          if [ ! -d "${{ github.workspace }}/${{ inputs.plugin_path }}" ]; then
+            echo "Error: Plugin path '${{ inputs.plugin_path }}' does not exist"
+            echo ""
+            echo "Available plugins:"
+            ls -1 plugins/
+            exit 1
+          fi
+          if [ ! -f "${{ github.workspace }}/${{ inputs.plugin_path }}/framer.json" ]; then
+            echo "Error: No framer.json found in '${{ inputs.plugin_path }}'"
+            exit 1
+          fi
+          echo "Plugin path validated: ${{ inputs.plugin_path }}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .tool-versions
+
+      - name: Install dependencies
+        run: yarn install
+        env:
+          YARN_ENABLE_HARDENED_MODE: 1
+
+
+      - name: Submit plugin
+        run: |
+          yarn tsx scripts/submit-plugin.ts
+        env:
+          PLUGIN_PATH: ${{ github.workspace }}/${{ inputs.plugin_path }}
+          REPO_ROOT: ${{ github.workspace }}
+          CHANGELOG: ${{ inputs.changelog }}
+          SESSION_TOKEN: ${{ secrets.SESSION_TOKEN }}
+          FRAMER_ADMIN_SECRET: ${{ secrets.FRAMER_ADMIN_SECRET }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          CREATORS_API_BASE: ${{ inputs.creators_api_base || vars.CREATORS_API_BASE }}
+          API_BASE: ${{ vars.API_BASE }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
