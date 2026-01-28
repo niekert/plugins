@@ -14,6 +14,7 @@
         "fix-biome": "turbo run --continue check-biome -- --write",
         "fix-eslint": "turbo run --continue check-eslint -- --fix",
         "build": "turbo run build",
+        "submit-plugin": "tsx scripts/submit-plugin.ts",
         "g:build": "cd $INIT_CWD && run g:vite build",
         "g:check-biome": "biome check $INIT_CWD",
         "g:check-eslint": "cd $INIT_CWD && DEBUG='eslint:eslint' eslint --report-unused-disable-directives-severity error .",
@@ -30,6 +31,7 @@
         "@framer/vite-config": "workspace:*",
         "eslint": "^9.35.0",
         "jiti": "^2.5.1",
+        "tsx": "^4.19.0",
         "turbo": "^2.5.6",
         "typescript": "^5.9.2",
         "vite": "^7.1.11"
