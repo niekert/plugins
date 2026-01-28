@@ -248,13 +248,21 @@ async function generateChangelog(
 
 Based on the following git diff and commit messages, create a changelog that:
 - Uses bullet points (- )
-- Focuses on features, fixes, and improvements users care about
-- Avoids technical implementation details
+- Focuses on FEATURES and FIXES that users care about, not implementation details
+- Groups related changes into ONE bullet point (e.g., if multiple commits implement "secondary locations", that's ONE feature)
 - Is written in past tense ("Added", "Fixed", "Improved")
-- Groups related changes together
-- Is concise (ideally 3-7 bullet points)
+- Is very concise - typically 1-3 bullet points, max 5 for major releases
+- Avoids technical jargon - write for end users, not developers
 
-If the changes are minimal or only internal, still provide at least one user-facing summary.
+Bad example (too granular):
+- Added Locations data source
+- Added collection selector dropdown
+- Fixed slug generation
+- Enhanced collection reference handling
+
+Good example (grouped by feature):
+- Added support for secondary job locations
+- Fixed slug generation for international city names
 
 Commit messages:
 ${commitMessages || "(no commit messages)"}
