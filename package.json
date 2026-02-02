@@ -14,7 +14,7 @@
         "fix-biome": "turbo run --continue check-biome -- --write",
         "fix-eslint": "turbo run --continue check-eslint -- --fix",
         "build": "turbo run build",
-        "submit-plugin": "tsx scripts/submit-plugin.ts",
+        "submit-plugin": "cd plugin-tools && yarn install && yarn submit-plugin",
         "g:build": "cd $INIT_CWD && run g:vite build",
         "g:check-biome": "biome check $INIT_CWD",
         "g:check-eslint": "cd $INIT_CWD && DEBUG='eslint:eslint' eslint --report-unused-disable-directives-severity error .",

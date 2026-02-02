@@ -79,15 +79,13 @@ jobs:
 
       # When called from another repo via workflow_call, also checkout this repo for the script
       - name: Checkout plugins repo (for submit script)
-        if: github.repository != 'framer/plugins'
+        if: github.repository != 'niekert/plugins'
         uses: actions/checkout@v4
         with:
-          repository: framer/plugins
+          repository: niekert/plugins
           path: _plugins-tools
           sparse-checkout: |
-            scripts
-            package.json
-            yarn.lock
+            plugin-tools
 
       - name: Validate plugin path
         run: |
@@ -109,15 +107,13 @@ jobs:
         with:
           node-version-file: .tool-versions
 
-      - name: Install dependencies
+      - name: Install plugin-tools dependencies
+        working-directory: ${{ github.repository != 'niekert/plugins' && '_plugins-tools/plugin-tools' || 'plugin-tools' }}
         run: yarn install
-        env:
-          YARN_ENABLE_HARDENED_MODE: 1
-
 
       - name: Submit plugin
-        run: |
-          yarn tsx scripts/submit-plugin.ts
+        working-directory: ${{ github.repository != 'niekert/plugins' && '_plugins-tools/plugin-tools' || 'plugin-tools' }}
+        run: yarn submit-plugin
         env:
           PLUGIN_PATH: ${{ github.workspace }}/${{ inputs.plugin_path }}
           REPO_ROOT: ${{ github.workspace }}

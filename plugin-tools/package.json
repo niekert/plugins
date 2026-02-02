@@ -1,0 +1,12 @@
+{
+    "name": "plugin-tools",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "submit-plugin": "tsx submit-plugin.ts"
+    },
+    "devDependencies": {
+        "tsx": "^4.19.0",
+        "typescript": "^5.9.2"
+    }
+}
