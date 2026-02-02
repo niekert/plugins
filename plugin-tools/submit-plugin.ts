@@ -655,15 +655,26 @@ async function main(): Promise<void> {
             throw new Error(`Plugin path does not exist: ${config.pluginPath}`)
         }
 
-        // 3. Load plugin info
+        // 3. Install plugin dependencies
+        log.step("Installing Plugin Dependencies")
+        try {
+            execSync("yarn install", {
+                cwd: config.pluginPath,
+                stdio: "inherit",
+            })
+            log.success("Dependencies installed")
+        } catch (error) {
+            throw new Error(`Yarn install failed: ${error instanceof Error ? error.message : String(error)}`)
+        }
+
+        // 4. Load plugin info
         log.step("Loading Plugin Info")
         pluginInfo = loadPluginInfo(config.pluginPath)
         log.info(`Name: ${pluginInfo.name}`)
         log.info(`Manifest ID: ${pluginInfo.id}`)
         log.info(`Workspace: ${pluginInfo.workspaceName}`)
 
-        // 4. Fetch user's plugins to find the database plugin ID
-
+        // 5. Fetch user's plugins to find the database plugin ID
         log.step("Fetching Plugin from Framer")
         const plugins = await fetchMyPlugins(config)
         const matchedPlugin = plugins.find(p => p.manifestId === pluginInfo?.id)
@@ -678,7 +689,7 @@ async function main(): Promise<void> {
         const plugin = matchedPlugin
         log.info(`Found plugin with database ID: ${plugin.id}`)
 
-        // 5. Get or generate changelog
+        // 6. Get or generate changelog
         if (config.changelog) {
             log.step("Using Provided Changelog")
             changelog = config.changelog
