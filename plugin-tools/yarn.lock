@@ -241,6 +241,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"adm-zip@npm:^0.5.16":
+  version: 0.5.16
+  resolution: "adm-zip@npm:0.5.16"
+  checksum: 10/e167d1b9e60cde37334efda828fa514680af9facbd4183952f36526390e5c7da9a90ca1e6880dfd3aba7b3517f1506c6178e0dc29cd630b26b98c795f97fc599
+  languageName: node
+  linkType: hard
+
 "agent-base@npm:^7.1.0, agent-base@npm:^7.1.2":
   version: 7.1.4
   resolution: "agent-base@npm:7.1.4"
@@ -414,6 +421,17 @@ __metadata:
     picomatch:
       optional: true
   checksum: 10/14ca1c9f0a0e8f4f2e9bf4e8551065a164a09545dae548c12a18d238b72e51e5a7b39bd8e5494b56463a0877672d0a6c1ef62c6fa0677db1b0c847773be939b1
+  languageName: node
+  linkType: hard
+
+"framer-plugin-tools@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "framer-plugin-tools@npm:1.0.0"
+  dependencies:
+    adm-zip: "npm:^0.5.16"
+  bin:
+    framer-plugin-tools: index.js
+  checksum: 10/5f6b731038cfd23ea1e9a4b4de48a903c9e97ddc43b3598004554adba91e0fbc14efec6e6e9089a752380ffb4635f563575e6d4c6fb36597cbdb43e9edf17de8
   languageName: node
   linkType: hard
 
@@ -713,6 +731,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "plugin-tools@workspace:."
   dependencies:
+    framer-plugin-tools: "npm:^1.0.0"
     tsx: "npm:^4.19.0"
     typescript: "npm:^5.9.2"
   languageName: unknown

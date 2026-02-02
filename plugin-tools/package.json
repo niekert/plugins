@@ -8,5 +8,8 @@
     "devDependencies": {
         "tsx": "^4.19.0",
         "typescript": "^5.9.2"
+    },
+    "dependencies": {
+        "framer-plugin-tools": "^1.0.0"
     }
 }

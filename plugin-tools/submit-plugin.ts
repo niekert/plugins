@@ -452,7 +452,7 @@ function packPlugin(pluginPath: string): string {
     log.info("Packing plugin...")
 
     try {
-        execSync("yarn framer-plugin-tools@latest pack", {
+        execSync("yarn framer-plugin-tools pack", {
             cwd: pluginPath,
             stdio: "inherit",
         })
