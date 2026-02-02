@@ -114,20 +114,10 @@ jobs:
         env:
           YARN_ENABLE_HARDENED_MODE: 1
 
-      - name: Install plugins-tools dependencies
-        if: github.repository != 'framer/plugins'
-        working-directory: _plugins-tools
-        run: yarn install
-        env:
-          YARN_ENABLE_HARDENED_MODE: 1
 
       - name: Submit plugin
         run: |
-          if [ -d "_plugins-tools" ]; then
-            cd _plugins-tools && yarn tsx scripts/submit-plugin.ts
-          else
-            yarn tsx scripts/submit-plugin.ts
-          fi
+          yarn tsx scripts/submit-plugin.ts
         env:
           PLUGIN_PATH: ${{ github.workspace }}/${{ inputs.plugin_path }}
           REPO_ROOT: ${{ github.workspace }}
