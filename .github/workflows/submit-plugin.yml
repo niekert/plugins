@@ -12,6 +12,14 @@ on:
         description: 'Changelog (leave empty to auto-generate with AI)'
         required: false
         type: string
+      environment:
+        description: 'Environment (development/production)'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - production
       dry_run:
         description: 'Dry run (skip submission and tagging)'
         required: false
@@ -28,6 +36,11 @@ on:
       changelog:
         description: 'Changelog (leave empty to auto-generate with AI)'
         required: false
+        type: string
+      environment:
+        description: 'Environment (development/production)'
+        required: true
+        default: 'development'
         type: string
       dry_run:
         description: 'Dry run (skip submission and tagging)'
@@ -56,6 +69,7 @@ jobs:
   submit:
     name: Submit Plugin
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
 
     steps:
       - name: Checkout repository

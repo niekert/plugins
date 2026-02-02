@@ -1,4 +1,4 @@
-#!/usr/bin/env npx tsx
+#!/usr/bin/env yarn tsx
 
 /**
  * Plugin Submission Script
@@ -22,7 +22,7 @@
 
 import { execSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
-import { join, resolve, basename } from "node:path"
+import { join, resolve } from "node:path"
 import OpenAI from "openai"
 
 // ============================================================================
@@ -73,10 +73,18 @@ interface Config {
 // ============================================================================
 
 const log = {
-    info: (msg: string) => console.log(`[INFO] ${msg}`),
-    success: (msg: string) => console.log(`[SUCCESS] ${msg}`),
-    error: (msg: string) => console.error(`[ERROR] ${msg}`),
-    step: (msg: string) => console.log(`\n=== ${msg} ===`),
+    info: (msg: string) => {
+        console.log(`[INFO] ${msg}`)
+    },
+    success: (msg: string) => {
+        console.log(`[SUCCESS] ${msg}`)
+    },
+    error: (msg: string) => {
+        console.error(`[ERROR] ${msg}`)
+    },
+    step: (msg: string) => {
+        console.log(`\n=== ${msg} ===`)
+    },
 }
 
 // ============================================================================
@@ -89,7 +97,7 @@ function getConfig(): Config {
     const sessionToken = process.env.SESSION_TOKEN
     const framerAdminSecret = process.env.FRAMER_ADMIN_SECRET
     const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL
-    const creatorsApiBase = process.env.CREATORS_API_BASE || "https://creators.framer.com"
+    const creatorsApiBase = process.env.CREATORS_API_BASE || "https://framer.com/marketplace"
     const dryRun = process.env.DRY_RUN === "true"
     const openrouterApiKey = process.env.OPENROUTER_API_KEY
     const openrouterModel = process.env.OPENROUTER_MODEL || "anthropic/claude-sonnet-4"
@@ -242,7 +250,8 @@ async function generateChangelog(
 
     // Truncate diff if too large (keep first 50k chars)
     const maxDiffLength = 50000
-    const truncatedDiff = diff.length > maxDiffLength ? diff.slice(0, maxDiffLength) + "\n\n[... diff truncated ...]" : diff
+    const truncatedDiff =
+        diff.length > maxDiffLength ? diff.slice(0, maxDiffLength) + "\n\n[... diff truncated ...]" : diff
 
     const prompt = `Generate a concise, user-facing changelog for a Framer plugin called "${pluginName}".
 
@@ -369,11 +378,7 @@ function packPlugin(pluginPath: string): string {
 // Framer API Submission
 // ============================================================================
 
-async function submitPlugin(
-    pluginInfo: PluginInfo,
-    changelog: string,
-    config: Config
-): Promise<SubmissionResponse> {
+async function submitPlugin(pluginInfo: PluginInfo, changelog: string, config: Config): Promise<SubmissionResponse> {
     const url = `${config.creatorsApiBase}/api/admin/plugin/${pluginInfo.id}/versions/`
 
     log.info(`Submitting to: ${url}`)
@@ -528,7 +533,7 @@ async function main(): Promise<void> {
 
     let config: Config
     let pluginInfo: PluginInfo
-    let changelog: string = ""
+    let changelog = ""
     // REPO_ROOT can be overridden when script is run from a different repo
     const repoRoot = process.env.REPO_ROOT || resolve(__dirname, "..")
 
@@ -635,7 +640,7 @@ async function main(): Promise<void> {
         log.error(errorMessage)
 
         // Send failure notification
-        if (config!?.slackWebhookUrl && !config!?.dryRun) {
+        if (config?.slackWebhookUrl && !config?.dryRun) {
             try {
                 await sendSlackNotification(
                     config!.slackWebhookUrl,
