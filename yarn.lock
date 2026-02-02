@@ -6176,6 +6176,7 @@ __metadata:
     "@framer/eslint-config": "workspace:*"
     "@framer/vite-config": "workspace:*"
     eslint: "npm:^9.35.0"
+    framer-plugin-tools: "npm:^1.0.0"
     jiti: "npm:^2.5.1"
     tsx: "npm:^4.19.0"
     turbo: "npm:^2.5.6"

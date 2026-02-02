@@ -448,25 +448,11 @@ function loadPluginInfo(pluginPath: string): PluginInfo {
     }
 }
 
-function buildPlugin(workspaceName: string, repoRoot: string): void {
-    log.info(`Building ${workspaceName}...`)
-
-    try {
-        execSync(`yarn workspace ${workspaceName} build`, {
-            cwd: repoRoot,
-            stdio: "inherit",
-        })
-        log.success("Build completed")
-    } catch (error) {
-        throw new Error(`Build failed: ${error instanceof Error ? error.message : String(error)}`)
-    }
-}
-
 function packPlugin(pluginPath: string): string {
     log.info("Packing plugin...")
 
     try {
-        execSync("npx framer-plugin-tools@latest pack", {
+        execSync("yarn framer-plugin-tools@latest pack", {
             cwd: pluginPath,
             stdio: "inherit",
         })
@@ -723,12 +709,8 @@ async function main(): Promise<void> {
             log.info(`Generated changelog:\n${changelog}`)
         }
 
-        // 6. Build the plugin
-        log.step("Building Plugin")
-        buildPlugin(pluginInfo.workspaceName, repoRoot)
-
-        // 7. Pack the plugin
-        log.step("Packing Plugin")
+        // 7. Build & Pack the plugin
+        log.step("Building & Packing Plugin")
         packPlugin(config.pluginPath)
 
         // 8. Submit (unless dry run)
