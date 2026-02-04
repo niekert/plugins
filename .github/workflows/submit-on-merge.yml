@@ -28,10 +28,6 @@ jobs:
           git config --global user.email "marketplace@framer.team"
           git config --global user.name "Framer Marketplace"
 
-      - name: Get changed files
-        id: changed-files
-        uses: tj-actions/changed-files@v45
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -44,11 +40,18 @@ jobs:
         working-directory: packages/plugin-tools
         run: yarn build
 
+      - name: Write PR body to file
+        run: |
+          cat <<'EOF' > /tmp/pr-body.txt
+          ${{ github.event.pull_request.body }}
+          EOF
+
       - name: Submit changed plugins
-        run: yarn tsx scripts/submit-on-merge.ts
+        run: |
+          export CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+          yarn tsx scripts/submit-on-merge.ts
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+          PR_BODY_FILE: /tmp/pr-body.txt
           SESSION_TOKEN: ${{ secrets.SESSION_TOKEN }}
           FRAMER_ADMIN_SECRET: ${{ secrets.FRAMER_ADMIN_SECRET }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

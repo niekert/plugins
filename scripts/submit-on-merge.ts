@@ -9,7 +9,7 @@
  * Usage: yarn tsx scripts/submit-on-merge.ts
  *
  * Environment Variables:
- *   PR_BODY        - Full PR body text (for changelog extraction)
+ *   PR_BODY_FILE   - Path to file containing PR body text
  *   CHANGED_FILES  - Space-separated list of changed files from the workflow
  *   REPO_ROOT      - Root of the git repository (optional, defaults to parent of scripts/)
  *
@@ -18,7 +18,7 @@
  */
 
 import { execSync } from "node:child_process"
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { extractChangelog, parseChangedPlugins } from "./lib/parse-pr"
 
@@ -102,16 +102,22 @@ async function main(): Promise<void> {
 
     // 1. Validate required environment variables
     log.step("Configuration")
-    const prBody = process.env.PR_BODY
+    const prBodyFile = process.env.PR_BODY_FILE
     const changedFiles = process.env.CHANGED_FILES
 
-    if (!prBody) {
-        throw new Error("Missing required environment variable: PR_BODY")
+    if (!prBodyFile) {
+        throw new Error("Missing required environment variable: PR_BODY_FILE")
     }
 
     if (!changedFiles) {
         throw new Error("Missing required environment variable: CHANGED_FILES")
     }
+
+    if (!existsSync(prBodyFile)) {
+        throw new Error(`PR_BODY_FILE does not exist: ${prBodyFile}`)
+    }
+
+    const prBody = readFileSync(prBodyFile, "utf-8")
 
     log.info(`Dry run: ${process.env.DRY_RUN === "true" ? "yes" : "no"}`)
 
