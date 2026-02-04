@@ -14,8 +14,10 @@
  *   OPENROUTER_API_KEY  - OpenRouter API key for changelog generation (required if CHANGELOG is empty)
  *   SESSION_TOKEN       - Framer session cookie (required unless DRY_RUN)
  *   FRAMER_ADMIN_SECRET - Framer admin API key (required unless DRY_RUN)
- *   SLACK_WEBHOOK_URL   - Slack workflow webhook for notifications (optional)
+ *   SLACK_WEBHOOK_URL   - Slack workflow webhook for success notifications (optional)
+ *   ERROR_WEBHOOK_URL   - Slack workflow webhook for error notifications (optional)
  *   RETOOL_URL          - Retool dashboard URL for Slack notifications (optional)
+ *   GITHUB_RUN_URL      - GitHub Actions run URL for error notifications (optional)
  *   FRAMER_ENV          - Environment: "production" or "development" (default: production)
  *   DRY_RUN             - Skip submission and tagging when "true" (optional)
  *   OPENROUTER_MODEL    - Model to use (default: anthropic/claude-sonnet-4)
@@ -64,7 +66,9 @@ interface Config {
     sessionToken: string | undefined
     framerAdminSecret: string | undefined
     slackWebhookUrl: string | undefined
+    errorWebhookUrl: string | undefined
     retoolUrl: string | undefined
+    githubRunUrl: string | undefined
     framerEnv: FramerEnv
     urls: EnvironmentUrls
     dryRun: boolean
@@ -165,7 +169,9 @@ function getConfig(): Config {
     const sessionToken = process.env.SESSION_TOKEN
     const framerAdminSecret = process.env.FRAMER_ADMIN_SECRET
     const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL
-    const retoolUrl = process.env.RETOOL_URL // Optional - only needed for Slack notifications
+    const errorWebhookUrl = process.env.ERROR_WEBHOOK_URL
+    const retoolUrl = process.env.RETOOL_URL
+    const githubRunUrl = process.env.GITHUB_RUN_URL
     const dryRun = process.env.DRY_RUN === "true"
     const openrouterApiKey = process.env.OPENROUTER_API_KEY
     const openrouterModel = process.env.OPENROUTER_MODEL ?? "anthropic/claude-sonnet-4"
@@ -207,7 +213,9 @@ function getConfig(): Config {
         sessionToken,
         framerAdminSecret,
         slackWebhookUrl,
+        errorWebhookUrl,
         retoolUrl,
+        githubRunUrl,
         framerEnv,
         urls: envUrls,
         dryRun,
@@ -635,6 +643,33 @@ async function sendSlackNotification(
     }
 }
 
+async function sendErrorNotification(errorMessage: string, config: Config): Promise<void> {
+    if (!config.errorWebhookUrl) return
+
+    const payload = {
+        githubActionRunUrl: config.githubRunUrl ?? "N/A (not running in GitHub Actions)",
+        errorMessage,
+    }
+
+    console.log("payload", payload)
+
+    try {
+        const response = await fetch(config.errorWebhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        })
+
+        if (!response.ok) {
+            log.error(`Error notification failed: ${response.status}`)
+        } else {
+            log.success("Error notification sent")
+        }
+    } catch (err) {
+        log.error(`Error notification error: ${err instanceof Error ? err.message : String(err)}`)
+    }
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -766,6 +801,9 @@ async function main(): Promise<void> {
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
         log.error(errorMessage)
+
+        await sendErrorNotification(errorMessage, config)
+
         process.exit(1)
     }
 }
