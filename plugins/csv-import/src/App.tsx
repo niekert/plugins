@@ -52,7 +52,7 @@ export function App({ initialCollection }: { initialCollection: Collection | nul
                     return
                 }
 
-                framer.notify("Error processing CSV file. Check console for detailsss.", {
+                framer.notify("Error processing CSV file. Check console for details.", {
                     variant: "error",
                 })
             }
