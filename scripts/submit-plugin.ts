@@ -132,7 +132,7 @@ const ENVIRONMENT_URLS: Record<FramerEnv, EnvironmentUrls> = {
         apiBase: "https://api.development.framer.com",
         creatorsApiBase: "https://marketplace.development.framer.com",
         framerAppUrl: "https://development.framer.com",
-        marketplaceBaseUrl: "https://marketplace.development.framer.com",
+        marketplaceBaseUrl: "https://marketplace.development.framer.com/marketplace",
     },
 }
 
@@ -608,7 +608,7 @@ async function sendSlackNotification(
     const payload: SlackWorkflowPayload = {
         pluginName: pluginInfo.name,
         pluginVersion: submissionResult.version,
-        marketplacePreviewUrl: `${config.urls.marketplaceBaseUrl}/marketplace/plugins/${submissionResult.slug}/preview`,
+        marketplacePreviewUrl: `${config.urls.marketplaceBaseUrl}/plugins/${submissionResult.slug}/preview`,
         pluginReviewUrl: `${config.urls.framerAppUrl}/projects/new?plugin=${submissionResult.internalPluginId}&pluginVersion=${submissionResult.versionId}`,
         changelog,
     }
