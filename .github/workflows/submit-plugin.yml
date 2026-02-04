@@ -115,6 +115,10 @@ jobs:
         working-directory: ${{ github.repository != 'niekert/plugins' && '_plugins-tools' || '.' }}
         run: yarn install
 
+      - name: Build framer-plugin-tools
+        working-directory: ${{ github.repository != 'niekert/plugins' && '_plugins-tools' || '.' }}
+        run: yarn turbo build --filter=framer-plugin-tools
+
       - name: Submit plugin
         working-directory: ${{ github.repository != 'niekert/plugins' && '_plugins-tools' || '.' }}
         run: yarn tsx scripts/submit-plugin.ts
