@@ -7,6 +7,8 @@ on:
       - edited
       - ready_for_review
       - synchronize
+      - labeled
+      - unlabeled
   workflow_dispatch:
     # NOTE: To prevent GitHub from adding PRs to the merge queue before check is done,
     # make sure that there is a ruleset that requires the “Shippy check to pass.
@@ -31,4 +33,23 @@ jobs:
             const prBody = context.payload.pull_request.body?.trim()
             if (!prBody) {
               core.setFailed("❌ PR description is required.")
+              return
+            }
+
+            // Check if "Submit Plugin" label is present
+            const labels = context.payload.pull_request.labels || []
+            const hasSubmitLabel = labels.some(label => label.name === 'Submit Plugin')
+
+            if (hasSubmitLabel) {
+              // Extract changelog (### Changelog section)
+              const changelogPattern = /### Changelog\s*\n([\s\S]*?)(?=\n### |\n## |$)/i
+              const match = prBody.match(changelogPattern)
+              const changelog = match?.[1]?.trim()
+
+              if (!changelog || changelog === '-') {
+                core.setFailed("❌ Changelog required when 'Submit Plugin' label is applied. Add content to the '### Changelog' section in your PR description.")
+                return
+              }
+
+              core.info("✅ Changelog validation passed")
             }

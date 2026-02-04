@@ -3158,6 +3158,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/node@npm:^22.15.21":
+  version: 22.19.8
+  resolution: "@types/node@npm:22.19.8"
+  dependencies:
+    undici-types: "npm:~6.21.0"
+  checksum: 10/a61c68d434871d4a13496e3607502b2ff8e2ff69dca7e09228de5bea3bc95eb627d09243a8cff8e0bf9ff1fa13baaf0178531748f59ae81f0569c7a2f053bfa5
+  languageName: node
+  linkType: hard
+
 "@types/papaparse@npm:^5.3.16":
   version: 5.3.16
   resolution: "@types/papaparse@npm:5.3.16"
@@ -6507,6 +6516,7 @@ __metadata:
     "@biomejs/biome": "npm:^2.2.4"
     "@framer/eslint-config": "workspace:*"
     "@framer/vite-config": "workspace:*"
+    "@types/node": "npm:^22.15.21"
     eslint: "npm:^9.35.0"
     framer-plugin-tools: "workspace:*"
     jiti: "npm:^2.5.1"
@@ -6514,6 +6524,7 @@ __metadata:
     turbo: "npm:^2.5.6"
     typescript: "npm:^5.9.2"
     vite: "npm:^7.1.11"
+    vitest: "npm:^3.2.4"
   languageName: unknown
   linkType: soft
 
