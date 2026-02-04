@@ -94,6 +94,11 @@ jobs:
             .yarnrc.yml
             .yarn
 
+      - name: Configure git identity
+        run: |
+          git config --global user.email "marketplace@framer.team"
+          git config --global user.name "Framer Marketplace"
+
       - name: Validate plugin path
         run: |
           if [ ! -d "${{ github.workspace }}/${{ inputs.plugin_path }}" ]; then
