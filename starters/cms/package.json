@@ -11,7 +11,7 @@
         "check-eslint": "DEBUG='eslint:eslint' eslint --max-warnings 0 .",
         "check-prettier": "prettier --check .",
         "check-typescript": "tsc",
-        "pack": "framer-plugin-tools pack",
+        "pack": "run g:pack",
         "preview": "vite preview"
     },
     "dependencies": {
