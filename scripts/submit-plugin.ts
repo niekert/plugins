@@ -22,10 +22,10 @@
  *   REPO_ROOT           - Root of the git repository (default: parent of scripts/)
  */
 
+import { runBuildScript, zipDistFolder } from "framer-plugin-tools"
 import { execSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { runBuildScript, zipDistFolder } from "framer-plugin-tools"
 
 // ============================================================================
 // Types
@@ -54,7 +54,7 @@ interface PluginInfo {
 interface SubmissionResponse {
     version: string
     versionId: string
-    pluginId: string
+    internalPluginId: string
     slug: string
 }
 
@@ -557,6 +557,14 @@ function createGitTag(pluginName: string, version: string, changelog: string, re
     log.info(`Creating git tag: ${tagName}`)
 
     try {
+        // Delete existing tag if it exists (e.g., from a rejected submission)
+        try {
+            execSync(`git tag -d "${tagName}"`, { cwd: repoRoot, stdio: "pipe" })
+            execSync(`git push origin --delete "${tagName}"`, { cwd: repoRoot, stdio: "pipe" })
+        } catch {
+            // Tag doesn't exist, that's fine
+        }
+
         // Create annotated tag with changelog as message
         const escapedChangelog = changelog.replace(/'/g, "'\\''")
         execSync(`git tag -a "${tagName}" -m '${escapedChangelog}'`, {
@@ -600,8 +608,8 @@ async function sendSlackNotification(
     const payload: SlackWorkflowPayload = {
         pluginName: pluginInfo.name,
         pluginVersion: submissionResult.version,
-        marketplacePreviewUrl: `${config.urls.marketplaceBaseUrl}/plugins/${submissionResult.slug}/review`,
-        pluginReviewUrl: `${config.urls.framerAppUrl}/projects/new?plugin=${submissionResult.pluginId}&pluginVersion=${submissionResult.versionId}`,
+        marketplacePreviewUrl: `${config.urls.marketplaceBaseUrl}/marketplace/plugins/${submissionResult.slug}/preview`,
+        pluginReviewUrl: `${config.urls.framerAppUrl}/projects/new?plugin=${submissionResult.internalPluginId}&pluginVersion=${submissionResult.versionId}`,
         changelog,
     }
 
