@@ -587,12 +587,14 @@ interface SlackWorkflowPayload {
     marketplacePreviewUrl: string
     pluginVersion: string
     pluginReviewUrl: string
+    changelog: string
 }
 
 async function sendSlackNotification(
     webhookUrl: string,
     pluginInfo: PluginInfo,
     submissionResult: SubmissionResponse,
+    changelog: string,
     config: Config
 ): Promise<void> {
     const payload: SlackWorkflowPayload = {
@@ -600,6 +602,7 @@ async function sendSlackNotification(
         pluginVersion: submissionResult.version,
         marketplacePreviewUrl: `${config.urls.marketplaceBaseUrl}/plugins/${submissionResult.slug}/review`,
         pluginReviewUrl: `${config.urls.framerAppUrl}/projects/new?plugin=${submissionResult.pluginId}&pluginVersion=${submissionResult.versionId}`,
+        changelog,
     }
 
     // Only include retoolUrl if configured
@@ -746,7 +749,7 @@ async function main(): Promise<void> {
         // 10. Send Slack notification (only on successful submission)
         if (config.slackWebhookUrl && submissionResult) {
             log.step("Sending Slack Notification")
-            await sendSlackNotification(config.slackWebhookUrl, pluginInfo, submissionResult, config)
+            await sendSlackNotification(config.slackWebhookUrl, pluginInfo, submissionResult, changelog, config)
         }
 
         console.log("\n" + "=".repeat(60))
