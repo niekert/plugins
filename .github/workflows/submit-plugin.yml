@@ -47,10 +47,6 @@ on:
         required: false
         default: false
         type: boolean
-      creators_api_base:
-        description: 'Override Framer API base URL'
-        required: false
-        type: string
     secrets:
       SESSION_TOKEN:
         description: 'Framer session cookie'
@@ -63,6 +59,9 @@ on:
         required: false
       OPENROUTER_API_KEY:
         description: 'OpenRouter API key for AI changelog generation'
+        required: false
+      RETOOL_URL:
+        description: 'Retool dashboard URL for Slack notifications'
         required: false
 
 jobs:
@@ -85,7 +84,12 @@ jobs:
           repository: niekert/plugins
           path: _plugins-tools
           sparse-checkout: |
-            plugin-tools
+            scripts
+            packages/plugin-tools
+            package.json
+            yarn.lock
+            .yarnrc.yml
+            .yarn
 
       - name: Validate plugin path
         run: |
@@ -107,13 +111,13 @@ jobs:
         with:
           node-version-file: .tool-versions
 
-      - name: Install plugin-tools dependencies
-        working-directory: ${{ github.repository != 'niekert/plugins' && '_plugins-tools/plugin-tools' || 'plugin-tools' }}
+      - name: Install dependencies
+        working-directory: ${{ github.repository != 'niekert/plugins' && '_plugins-tools' || '.' }}
         run: yarn install
 
       - name: Submit plugin
-        working-directory: ${{ github.repository != 'niekert/plugins' && '_plugins-tools/plugin-tools' || 'plugin-tools' }}
-        run: yarn submit-plugin
+        working-directory: ${{ github.repository != 'niekert/plugins' && '_plugins-tools' || '.' }}
+        run: yarn tsx scripts/submit-plugin.ts
         env:
           PLUGIN_PATH: ${{ github.workspace }}/${{ inputs.plugin_path }}
           REPO_ROOT: ${{ github.workspace }}
@@ -121,8 +125,8 @@ jobs:
           SESSION_TOKEN: ${{ secrets.SESSION_TOKEN }}
           FRAMER_ADMIN_SECRET: ${{ secrets.FRAMER_ADMIN_SECRET }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          RETOOL_URL: ${{ secrets.RETOOL_URL }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          CREATORS_API_BASE: ${{ inputs.creators_api_base || vars.CREATORS_API_BASE }}
-          API_BASE: ${{ vars.API_BASE }}
+          FRAMER_ENV: ${{ inputs.environment }}
           DRY_RUN: ${{ inputs.dry_run }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
