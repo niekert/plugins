@@ -63,6 +63,9 @@ on:
       RETOOL_URL:
         description: 'Retool dashboard URL for Slack notifications'
         required: false
+      ERROR_WEBHOOK_URL:
+        description: 'Slack webhook URL for error notifications'
+        required: false
 
 jobs:
   submit:
@@ -116,8 +119,8 @@ jobs:
         run: yarn install
 
       - name: Build framer-plugin-tools
-        working-directory: ${{ github.repository != 'niekert/plugins' && '_plugins-tools' || '.' }}
-        run: yarn turbo build --filter=framer-plugin-tools
+        working-directory: ${{ github.repository != 'niekert/plugins' && '_plugins-tools/packages/plugin-tools' || 'packages/plugin-tools' }}
+        run: yarn build
 
       - name: Submit plugin
         working-directory: ${{ github.repository != 'niekert/plugins' && '_plugins-tools' || '.' }}
@@ -129,8 +132,10 @@ jobs:
           SESSION_TOKEN: ${{ secrets.SESSION_TOKEN }}
           FRAMER_ADMIN_SECRET: ${{ secrets.FRAMER_ADMIN_SECRET }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          ERROR_WEBHOOK_URL: ${{ secrets.ERROR_WEBHOOK_URL }}
           RETOOL_URL: ${{ secrets.RETOOL_URL }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           FRAMER_ENV: ${{ inputs.environment }}
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           DRY_RUN: ${{ inputs.dry_run }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -3958,7 +3958,6 @@ __metadata:
     eslint-plugin-react-hooks: "npm:^5.2.0"
     eslint-plugin-react-refresh: "npm:^0.4.20"
     framer-plugin: "npm:^3.6.0"
-    framer-plugin-tools: "npm:^1.0.0"
     globals: "npm:^16.4.0"
     jiti: "npm:^2.5.1"
     prettier: "npm:^3.6.2"
@@ -5093,17 +5092,6 @@ __metadata:
     react-dom:
       optional: true
   checksum: 10/c15af3dc22476bf10d7509b9a336d113ed0fbeba57fca81ce5a6bf07f0d659ebc3588c3a839475cbdfc9601b64e2fc7551911e1c806dd2b896603c8a2c0c3870
-  languageName: node
-  linkType: hard
-
-"framer-plugin-tools@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "framer-plugin-tools@npm:1.0.0"
-  dependencies:
-    adm-zip: "npm:^0.5.16"
-  bin:
-    framer-plugin-tools: index.js
-  checksum: 10/5f6b731038cfd23ea1e9a4b4de48a903c9e97ddc43b3598004554adba91e0fbc14efec6e6e9089a752380ffb4635f563575e6d4c6fb36597cbdb43e9edf17de8
   languageName: node
   linkType: hard
 
@@ -6270,7 +6258,6 @@ __metadata:
     "@types/react": "npm:^18.3.24"
     "@types/react-dom": "npm:^18.3.7"
     framer-plugin: "npm:3.10.2-alpha.0"
-    framer-plugin-tools: "npm:^1.0.0"
     react: "npm:^18.3.1"
     react-dom: "npm:^18.3.1"
     valibot: "npm:^1.2.0"
@@ -7080,7 +7067,6 @@ __metadata:
     "@types/react-dom": "npm:^18.3.7"
     classnames: "npm:^2.5.1"
     framer-plugin: "npm:^3.7.0"
-    framer-plugin-tools: "npm:^1.0.0"
     react: "npm:^18.3.1"
     react-dom: "npm:^18.3.1"
   languageName: unknown
