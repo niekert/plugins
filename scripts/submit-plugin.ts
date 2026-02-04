@@ -607,7 +607,6 @@ interface SlackWorkflowPayload {
 }
 
 async function sendSlackNotification(
-    webhookUrl: string,
     pluginInfo: PluginInfo,
     submissionResult: SubmissionResponse,
     changelog: string,
@@ -626,8 +625,10 @@ async function sendSlackNotification(
         payload.retoolUrl = config.retoolUrl
     }
 
+    if (!config.slackWebhookUrl) return
+
     try {
-        const response = await fetch(webhookUrl, {
+        const response = await fetch(config.slackWebhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
@@ -643,15 +644,18 @@ async function sendSlackNotification(
     }
 }
 
-async function sendErrorNotification(errorMessage: string, config: Config): Promise<void> {
+async function sendErrorNotification(
+    errorMessage: string,
+    pluginName: string | undefined,
+    config: Config
+): Promise<void> {
     if (!config.errorWebhookUrl) return
 
     const payload = {
         githubActionRunUrl: config.githubRunUrl ?? "N/A (not running in GitHub Actions)",
         errorMessage,
+        pluginName: pluginName ?? "Unknown",
     }
-
-    console.log("payload", payload)
 
     try {
         const response = await fetch(config.errorWebhookUrl, {
@@ -792,7 +796,7 @@ async function main(): Promise<void> {
         // 10. Send Slack notification (only on successful submission)
         if (config.slackWebhookUrl && submissionResult) {
             log.step("Sending Slack Notification")
-            await sendSlackNotification(config.slackWebhookUrl, pluginInfo, submissionResult, changelog, config)
+            await sendSlackNotification(pluginInfo, submissionResult, changelog, config)
         }
 
         console.log("\n" + "=".repeat(60))
@@ -802,7 +806,7 @@ async function main(): Promise<void> {
         const errorMessage = error instanceof Error ? error.message : String(error)
         log.error(errorMessage)
 
-        await sendErrorNotification(errorMessage, config)
+        await sendErrorNotification(errorMessage, pluginInfo?.name, config)
 
         process.exit(1)
     }
