@@ -6,7 +6,7 @@
  * Builds, packs, and submits a plugin to the Framer marketplace.
  * Automatically generates changelog from git diff using AI.
  *
- * Usage: cd plugin-tools && yarn install && yarn submit-plugin
+ * Usage: yarn tsx scripts/submit-plugin.ts
  *
  * Environment Variables:
  *   PLUGIN_PATH         - Path to the plugin directory (required)
@@ -14,16 +14,18 @@
  *   OPENROUTER_API_KEY  - OpenRouter API key for changelog generation (required if CHANGELOG is empty)
  *   SESSION_TOKEN       - Framer session cookie (required unless DRY_RUN)
  *   FRAMER_ADMIN_SECRET - Framer admin API key (required unless DRY_RUN)
- *   SLACK_WEBHOOK_URL   - Slack webhook for notifications (optional)
- *   CREATORS_API_BASE   - Marketplace API base URL (default: https://framer.com/marketplace)
- *   API_BASE            - Framer API base URL (default: https://api.framer.com)
+ *   SLACK_WEBHOOK_URL   - Slack workflow webhook for notifications (optional)
+ *   RETOOL_URL          - Retool dashboard URL for Slack notifications (optional)
+ *   FRAMER_ENV          - Environment: "production" or "development" (default: production)
  *   DRY_RUN             - Skip submission and tagging when "true" (optional)
  *   OPENROUTER_MODEL    - Model to use (default: anthropic/claude-sonnet-4)
+ *   REPO_ROOT           - Root of the git repository (default: parent of scripts/)
  */
 
 import { execSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
+import { runBuildScript, zipDistFolder } from "framer-plugin-tools"
 
 // ============================================================================
 // Types
@@ -62,8 +64,9 @@ interface Config {
     sessionToken: string | undefined
     framerAdminSecret: string | undefined
     slackWebhookUrl: string | undefined
-    creatorsApiBase: string
-    apiBase: string
+    retoolUrl: string | undefined
+    framerEnv: FramerEnv
+    urls: EnvironmentUrls
     dryRun: boolean
     openrouterApiKey: string | undefined
     openrouterModel: string
@@ -106,6 +109,34 @@ interface PluginsResponse {
 }
 
 // ============================================================================
+// Environment Configuration
+// ============================================================================
+
+type FramerEnv = "production" | "development"
+
+interface EnvironmentUrls {
+    apiBase: string
+    creatorsApiBase: string
+    framerAppUrl: string
+    marketplaceBaseUrl: string
+}
+
+const ENVIRONMENT_URLS: Record<FramerEnv, EnvironmentUrls> = {
+    production: {
+        apiBase: "https://api.framer.com",
+        creatorsApiBase: "https://framer.com/marketplace",
+        framerAppUrl: "https://framer.com",
+        marketplaceBaseUrl: "https://framer.com/marketplace",
+    },
+    development: {
+        apiBase: "https://api.development.framer.com",
+        creatorsApiBase: "https://marketplace.development.framer.com",
+        framerAppUrl: "https://development.framer.com",
+        marketplaceBaseUrl: "https://marketplace.development.framer.com",
+    },
+}
+
+// ============================================================================
 // Logging
 // ============================================================================
 
@@ -134,11 +165,18 @@ function getConfig(): Config {
     const sessionToken = process.env.SESSION_TOKEN
     const framerAdminSecret = process.env.FRAMER_ADMIN_SECRET
     const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL
-    const creatorsApiBase = process.env.CREATORS_API_BASE ?? "https://framer.com/marketplace"
-    const apiBase = process.env.API_BASE ?? "https://api.framer.com"
+    const retoolUrl = process.env.RETOOL_URL // Optional - only needed for Slack notifications
     const dryRun = process.env.DRY_RUN === "true"
     const openrouterApiKey = process.env.OPENROUTER_API_KEY
     const openrouterModel = process.env.OPENROUTER_MODEL ?? "anthropic/claude-sonnet-4"
+
+    // Environment configuration
+    const framerEnvInput = process.env.FRAMER_ENV ?? "production"
+    if (framerEnvInput !== "production" && framerEnvInput !== "development") {
+        throw new Error(`Invalid FRAMER_ENV: "${framerEnvInput}". Must be "production" or "development".`)
+    }
+    const framerEnv: FramerEnv = framerEnvInput
+    const envUrls = ENVIRONMENT_URLS[framerEnv]
 
     const missing: string[] = []
 
@@ -169,8 +207,9 @@ function getConfig(): Config {
         sessionToken,
         framerAdminSecret,
         slackWebhookUrl,
-        creatorsApiBase,
-        apiBase,
+        retoolUrl,
+        framerEnv,
+        urls: envUrls,
         dryRun,
         openrouterApiKey,
         openrouterModel,
@@ -186,7 +225,7 @@ async function getAccessToken(config: Config): Promise<string> {
         throw new Error("Session token is required")
     }
 
-    const response = await fetch(`${config.apiBase}/auth/web/access-token`, {
+    const response = await fetch(`${config.urls.apiBase}/auth/web/access-token`, {
         headers: {
             Cookie: `session=${config.sessionToken}`,
         },
@@ -206,7 +245,7 @@ async function getAccessToken(config: Config): Promise<string> {
 async function fetchMyPlugins(config: Config): Promise<Plugin[]> {
     const accessToken = await getAccessToken(config)
 
-    const response = await fetch(`${config.apiBase}/site/v1/plugins/me`, {
+    const response = await fetch(`${config.urls.apiBase}/site/v1/plugins/me`, {
         headers: {
             Authorization: `Bearer ${accessToken}`,
         },
@@ -448,26 +487,19 @@ function loadPluginInfo(pluginPath: string): PluginInfo {
     }
 }
 
-function packPlugin(pluginPath: string): string {
-    log.info("Packing plugin...")
+async function packPlugin(pluginPath: string): Promise<string> {
+    log.info("Building plugin...")
+    await runBuildScript(pluginPath)
 
-    try {
-        execSync("yarn framer-plugin-tools pack", {
-            cwd: pluginPath,
-            stdio: "inherit",
-        })
+    log.info("Creating plugin.zip...")
+    const zipPath = zipDistFolder({
+        cwd: pluginPath,
+        distPath: "dist",
+        zipFileName: "plugin.zip",
+    })
 
-        const zipPath = join(pluginPath, "plugin.zip")
-
-        if (!existsSync(zipPath)) {
-            throw new Error(`Expected plugin.zip not found at ${zipPath}`)
-        }
-
-        log.success(`Created: ${zipPath}`)
-        return zipPath
-    } catch (error) {
-        throw new Error(`Pack failed: ${error instanceof Error ? error.message : String(error)}`)
-    }
+    log.success(`Created: ${zipPath}`)
+    return zipPath
 }
 
 // ============================================================================
@@ -484,7 +516,7 @@ async function submitPlugin(
         throw new Error("Session token and Framer admin secret are required for submission")
     }
 
-    const url = `${config.creatorsApiBase}/api/admin/plugin/${plugin.id}/versions/`
+    const url = `${config.urls.creatorsApiBase}/api/admin/plugin/${plugin.id}/versions/`
 
     log.info(`Submitting to: ${url}`)
 
@@ -549,72 +581,37 @@ function createGitTag(pluginName: string, version: string, changelog: string, re
 // Slack Notifications
 // ============================================================================
 
-interface SlackBlock {
-    type: string
-    text?: { type: string; text: string }
-}
-
-interface SlackMessage {
-    text: string
-    blocks?: SlackBlock[]
+interface SlackWorkflowPayload {
+    pluginName: string
+    retoolUrl?: string
+    marketplacePreviewUrl: string
+    pluginVersion: string
+    pluginReviewUrl: string
 }
 
 async function sendSlackNotification(
     webhookUrl: string,
     pluginInfo: PluginInfo,
-    changelog: string,
-    success: boolean,
-    version?: string,
-    error?: string,
-    dryRun?: boolean
+    submissionResult: SubmissionResponse,
+    config: Config
 ): Promise<void> {
-    const prefix = dryRun ? "[DRY RUN] " : ""
+    const payload: SlackWorkflowPayload = {
+        pluginName: pluginInfo.name,
+        pluginVersion: submissionResult.version,
+        marketplacePreviewUrl: `${config.urls.marketplaceBaseUrl}/plugins/${submissionResult.slug}/review`,
+        pluginReviewUrl: `${config.urls.framerAppUrl}/projects/new?plugin=${submissionResult.pluginId}&pluginVersion=${submissionResult.versionId}`,
+    }
 
-    const message: SlackMessage = success
-        ? {
-              text: `${prefix}Plugin submitted: ${pluginInfo.name}${version ? ` v${version}` : ""}`,
-              blocks: [
-                  {
-                      type: "section",
-                      text: {
-                          type: "mrkdwn",
-                          text: `*${prefix}Plugin submitted successfully!*\n\n*Name:* ${pluginInfo.name}${version ? `\n*Version:* ${version}` : ""}`,
-                      },
-                  },
-                  {
-                      type: "section",
-                      text: {
-                          type: "mrkdwn",
-                          text: `*Changelog:*\n${changelog}`,
-                      },
-                  },
-              ],
-          }
-        : {
-              text: `Plugin submission failed: ${pluginInfo.name}`,
-              blocks: [
-                  {
-                      type: "section",
-                      text: {
-                          type: "mrkdwn",
-                          text: `*Plugin submission failed!*\n\n*Name:* ${pluginInfo.name}`,
-                      },
-                  },
-                  {
-                      type: "section",
-                      text: {
-                          type: "mrkdwn",
-                          text: `*Error:*\n\`\`\`${error ?? "Unknown error"}\`\`\``,
-                      },
-                  },
-              ],
-          }
+    // Only include retoolUrl if configured
+    if (config.retoolUrl) {
+        payload.retoolUrl = config.retoolUrl
+    }
 
     try {
         const response = await fetch(webhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(message),
+            body: JSON.stringify(payload),
         })
 
         if (!response.ok) {
@@ -646,7 +643,8 @@ async function main(): Promise<void> {
 
     try {
         log.info(`Plugin path: ${config.pluginPath}`)
-        log.info(`API base: ${config.creatorsApiBase}`)
+        log.info(`Environment: ${config.framerEnv}`)
+        log.info(`API base: ${config.urls.creatorsApiBase}`)
         log.info(`Dry run: ${String(config.dryRun)}`)
         log.info(`AI model: ${config.openrouterModel}`)
 
@@ -700,29 +698,29 @@ async function main(): Promise<void> {
 
             if (lastTag) {
                 log.info(`Last release: ${lastTag}`)
+                const diff = getGitDiff(config.pluginPath, lastTag, repoRoot)
+                const commitMessages = getCommitMessages(config.pluginPath, lastTag, repoRoot)
+
+                if (!diff && !commitMessages) {
+                    throw new Error("No changes detected since last release. Nothing to submit.")
+                }
+
+                log.info(`Diff size: ${diff.length} chars`)
+                log.info(`Commits: ${commitMessages.split("\n").filter(Boolean).length}`)
+
+                // Generate changelog with AI
+                log.step("Generating Changelog with AI")
+                changelog = await generateChangelog(pluginInfo.name, diff, commitMessages, config)
+                log.info(`Generated changelog:\n${changelog}`)
             } else {
                 log.info("No previous release found - this will be the first version")
+                changelog = "First release"
             }
-
-            const diff = getGitDiff(config.pluginPath, lastTag, repoRoot)
-            const commitMessages = getCommitMessages(config.pluginPath, lastTag, repoRoot)
-
-            if (!diff && !commitMessages) {
-                throw new Error("No changes detected since last release. Nothing to submit.")
-            }
-
-            log.info(`Diff size: ${diff.length} chars`)
-            log.info(`Commits: ${commitMessages.split("\n").filter(Boolean).length}`)
-
-            // Generate changelog with AI
-            log.step("Generating Changelog with AI")
-            changelog = await generateChangelog(pluginInfo.name, diff, commitMessages, config)
-            log.info(`Generated changelog:\n${changelog}`)
         }
 
         // 7. Build & Pack the plugin
         log.step("Building & Packing Plugin")
-        packPlugin(config.pluginPath)
+        await packPlugin(config.pluginPath)
 
         // 8. Submit (unless dry run)
         let submissionResult: SubmissionResponse | undefined
@@ -745,18 +743,10 @@ async function main(): Promise<void> {
             createGitTag(pluginInfo.name, submissionResult.version, changelog, repoRoot)
         }
 
-        // 10. Send Slack notification
-        if (config.slackWebhookUrl) {
+        // 10. Send Slack notification (only on successful submission)
+        if (config.slackWebhookUrl && submissionResult) {
             log.step("Sending Slack Notification")
-            await sendSlackNotification(
-                config.slackWebhookUrl,
-                pluginInfo,
-                changelog,
-                true,
-                submissionResult?.version,
-                undefined,
-                config.dryRun
-            )
+            await sendSlackNotification(config.slackWebhookUrl, pluginInfo, submissionResult, config)
         }
 
         console.log("\n" + "=".repeat(60))
@@ -765,24 +755,6 @@ async function main(): Promise<void> {
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
         log.error(errorMessage)
-
-        // Send failure notification
-        if (config.slackWebhookUrl && !config.dryRun) {
-            try {
-                await sendSlackNotification(
-                    config.slackWebhookUrl,
-                    pluginInfo ?? { id: "unknown", name: "unknown", workspaceName: "unknown", path: "", zipPath: "" },
-                    changelog,
-                    false,
-                    undefined,
-                    errorMessage,
-                    false
-                )
-            } catch {
-                log.error("Failed to send failure notification to Slack")
-            }
-        }
-
         process.exit(1)
     }
 }
