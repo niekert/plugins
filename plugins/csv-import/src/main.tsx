@@ -6,7 +6,7 @@ import { App } from "./App.tsx"
 import { MiniRouterProvider } from "./minirouter.tsx"
 
 const root = document.getElementById("root")
-if (!root) throw new Error("Root element not found in DOM")
+if (!root) throw new Error("Root element not found here.")
 
 const collection = await framer.getActiveCollection()
 if (collection && collection.managedBy !== "user") {
