@@ -1,4 +1,4 @@
-name: Submit on merge
+name: Submit Plugin
 
 on:
   # Manual trigger from GitHub UI
@@ -66,7 +66,7 @@ on:
 
 jobs:
   submit:
-    name: Submit on merge
+    name: Submit Plugin to Marketplace
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
 
@@ -75,21 +75,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Full history for git tags and diff
-
-      # When called from another repo via workflow_call, also checkout this repo for the script
-      - name: Checkout plugins repo (for submit script)
-        if: github.repository != 'niekert/plugins'
-        uses: actions/checkout@v4
-        with:
-          repository: niekert/plugins
-          path: _plugins-tools
-          sparse-checkout: |
-            scripts
-            packages/plugin-tools
-            package.json
-            yarn.lock
-            .yarnrc.yml
-            .yarn
 
       - name: Configure git identity
         run: |
@@ -117,15 +102,12 @@ jobs:
           node-version-file: .tool-versions
 
       - name: Install dependencies
-        working-directory: ${{ github.repository != 'niekert/plugins' && '_plugins-tools' || '.' }}
         run: yarn install
 
       - name: Build framer-plugin-tools
-        working-directory: ${{ github.repository != 'niekert/plugins' && '_plugins-tools/packages/plugin-tools' || 'packages/plugin-tools' }}
         run: yarn build
 
       - name: Submit plugin
-        working-directory: ${{ github.repository != 'niekert/plugins' && '_plugins-tools' || '.' }}
         run: yarn tsx scripts/submit-plugin.ts
         env:
           PLUGIN_PATH: ${{ github.workspace }}/${{ inputs.plugin_path }}
