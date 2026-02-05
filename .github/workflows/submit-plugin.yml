@@ -60,7 +60,7 @@ on:
       RETOOL_URL:
         description: 'Retool dashboard URL for Slack notifications'
         required: false
-      ERROR_WEBHOOK_URL:
+      SLACK_ERROR_WEBHOOK_URL:
         description: 'Slack webhook URL for error notifications'
         required: false
 
@@ -116,7 +116,7 @@ jobs:
           SESSION_TOKEN: ${{ secrets.SESSION_TOKEN }}
           FRAMER_ADMIN_SECRET: ${{ secrets.FRAMER_ADMIN_SECRET }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          ERROR_WEBHOOK_URL: ${{ secrets.ERROR_WEBHOOK_URL }}
+          SLACK_ERROR_WEBHOOK_URL: ${{ secrets.SLACK_ERROR_WEBHOOK_URL }}
           RETOOL_URL: ${{ secrets.RETOOL_URL }}
           FRAMER_ENV: ${{ inputs.environment }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

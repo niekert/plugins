@@ -13,7 +13,7 @@
  *   SESSION_TOKEN       - Framer session cookie (required unless DRY_RUN)
  *   FRAMER_ADMIN_SECRET - Framer admin API key (required unless DRY_RUN)
  *   SLACK_WEBHOOK_URL   - Slack workflow webhook for success notifications (optional)
- *   ERROR_WEBHOOK_URL   - Slack workflow webhook for error notifications (optional)
+ *   SLACK_ERROR_WEBHOOK_URL - Slack workflow webhook for error notifications (optional)
  *   RETOOL_URL          - Retool dashboard URL for Slack notifications (optional)
  *   GITHUB_RUN_URL      - GitHub Actions run URL for error notifications (optional)
  *   FRAMER_ENV          - Environment: "production" or "development" (default: production)
@@ -39,7 +39,7 @@ const EnvSchema = v.object({
     SESSION_TOKEN: v.optional(v.string()),
     FRAMER_ADMIN_SECRET: v.optional(v.string()),
     SLACK_WEBHOOK_URL: v.optional(v.string()),
-    ERROR_WEBHOOK_URL: v.optional(v.string()),
+    SLACK_ERROR_WEBHOOK_URL: v.optional(v.string()),
     RETOOL_URL: v.optional(v.string()),
     GITHUB_RUN_URL: v.optional(v.string()),
     FRAMER_ENV: v.optional(FramerEnvSchema, "production"),
@@ -217,7 +217,7 @@ function getConfig(): Config {
         sessionToken: env.SESSION_TOKEN,
         framerAdminSecret: env.FRAMER_ADMIN_SECRET,
         slackWebhookUrl: env.SLACK_WEBHOOK_URL,
-        errorWebhookUrl: env.ERROR_WEBHOOK_URL,
+        errorWebhookUrl: env.SLACK_ERROR_WEBHOOK_URL,
         retoolUrl: env.RETOOL_URL,
         githubRunUrl: env.GITHUB_RUN_URL,
         framerEnv,

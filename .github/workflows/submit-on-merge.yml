@@ -56,7 +56,7 @@ jobs:
           SESSION_TOKEN: ${{ secrets.SESSION_TOKEN }}
           FRAMER_ADMIN_SECRET: ${{ secrets.FRAMER_ADMIN_SECRET }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          ERROR_WEBHOOK_URL: ${{ secrets.ERROR_WEBHOOK_URL }}
+          SLACK_ERROR_WEBHOOK_URL: ${{ secrets.SLACK_ERROR_WEBHOOK_URL }}
           RETOOL_URL: ${{ secrets.RETOOL_URL }}
           # FIXME: Should be production
           FRAMER_ENV: development
