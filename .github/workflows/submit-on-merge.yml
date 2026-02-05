@@ -15,7 +15,8 @@ jobs:
     if: |
       github.event.pull_request.merged == true &&
       contains(github.event.pull_request.labels.*.name, 'Submit Plugin')
-    environment: production
+    # FIXME: Should be production
+    environment: development
 
     steps:
       - name: Checkout repository
@@ -57,7 +58,7 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           ERROR_WEBHOOK_URL: ${{ secrets.ERROR_WEBHOOK_URL }}
           RETOOL_URL: ${{ secrets.RETOOL_URL }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          FRAMER_ENV: production
+          # FIXME: Should be production
+          FRAMER_ENV: development
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

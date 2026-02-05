@@ -4,14 +4,12 @@
  * Plugin Submission Script
  *
  * Builds, packs, and submits a plugin to the Framer marketplace.
- * Automatically generates changelog from git diff using AI.
  *
  * Usage: yarn tsx scripts/submit-plugin.ts
  *
  * Environment Variables:
  *   PLUGIN_PATH         - Path to the plugin directory (required)
- *   CHANGELOG           - Changelog text (optional - if empty, generates with AI)
- *   OPENROUTER_API_KEY  - OpenRouter API key for changelog generation (required if CHANGELOG is empty)
+ *   CHANGELOG           - Changelog text (required)
  *   SESSION_TOKEN       - Framer session cookie (required unless DRY_RUN)
  *   FRAMER_ADMIN_SECRET - Framer admin API key (required unless DRY_RUN)
  *   SLACK_WEBHOOK_URL   - Slack workflow webhook for success notifications (optional)
@@ -20,7 +18,6 @@
  *   GITHUB_RUN_URL      - GitHub Actions run URL for error notifications (optional)
  *   FRAMER_ENV          - Environment: "production" or "development" (default: production)
  *   DRY_RUN             - Skip submission and tagging when "true" (optional)
- *   OPENROUTER_MODEL    - Model to use (default: anthropic/claude-sonnet-4)
  *   REPO_ROOT           - Root of the git repository (default: parent of scripts/)
  */
 
@@ -62,7 +59,7 @@ interface SubmissionResponse {
 
 interface Config {
     pluginPath: string
-    changelog: string | undefined
+    changelog: string
     sessionToken: string | undefined
     framerAdminSecret: string | undefined
     slackWebhookUrl: string | undefined
@@ -72,8 +69,6 @@ interface Config {
     framerEnv: FramerEnv
     urls: EnvironmentUrls
     dryRun: boolean
-    openrouterApiKey: string | undefined
-    openrouterModel: string
 }
 
 interface AccessTokenResponse {
@@ -165,7 +160,7 @@ const log = {
 
 function getConfig(): Config {
     const pluginPath = process.env.PLUGIN_PATH
-    const changelog = process.env.CHANGELOG?.trim() ?? undefined
+    const changelog = process.env.CHANGELOG?.trim()
     const sessionToken = process.env.SESSION_TOKEN
     const framerAdminSecret = process.env.FRAMER_ADMIN_SECRET
     const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL
@@ -173,8 +168,6 @@ function getConfig(): Config {
     const retoolUrl = process.env.RETOOL_URL
     const githubRunUrl = process.env.GITHUB_RUN_URL
     const dryRun = process.env.DRY_RUN === "true"
-    const openrouterApiKey = process.env.OPENROUTER_API_KEY
-    const openrouterModel = process.env.OPENROUTER_MODEL ?? "anthropic/claude-sonnet-4"
 
     // Environment configuration
     const framerEnvInput = process.env.FRAMER_ENV ?? "production"
@@ -187,11 +180,7 @@ function getConfig(): Config {
     const missing: string[] = []
 
     if (!pluginPath) missing.push("PLUGIN_PATH")
-
-    // Only require OpenRouter API key if changelog is not provided
-    if (!changelog && !openrouterApiKey) {
-        missing.push("OPENROUTER_API_KEY (required when CHANGELOG is empty)")
-    }
+    if (!changelog) missing.push("CHANGELOG")
 
     if (!dryRun) {
         if (!sessionToken) missing.push("SESSION_TOKEN")
@@ -202,9 +191,12 @@ function getConfig(): Config {
         throw new Error(`Missing required environment variables: ${missing.join(", ")}`)
     }
 
-    // TypeScript can't narrow based on the missing array check, so add explicit guard
+    // TypeScript can't narrow based on the missing array check, so add explicit guards
     if (!pluginPath) {
         throw new Error("PLUGIN_PATH is required")
+    }
+    if (!changelog) {
+        throw new Error("CHANGELOG is required")
     }
 
     return {
@@ -219,8 +211,6 @@ function getConfig(): Config {
         framerEnv,
         urls: envUrls,
         dryRun,
-        openrouterApiKey,
-        openrouterModel,
     }
 }
 
@@ -268,191 +258,6 @@ async function fetchMyPlugins(config: Config): Promise<Plugin[]> {
 
     const data = (await response.json()) as PluginsResponse
     return data.plugins
-}
-
-// ============================================================================
-// Git Operations
-// ============================================================================
-
-function getLastTagForPlugin(pluginName: string, repoRoot: string): string | null {
-    const tagPrefix = `${pluginName.toLowerCase().replace(/\s+/g, "-")}-v`
-
-    try {
-        // Get all tags matching the plugin prefix, sorted by version
-        const tags = execSync(`git tag -l "${tagPrefix}*" --sort=-v:refname`, {
-            cwd: repoRoot,
-            encoding: "utf-8",
-        })
-            .trim()
-            .split("\n")
-            .filter(Boolean)
-
-        if (tags.length === 0) {
-            return null
-        }
-
-        const latestTag = tags[0]
-        if (!latestTag) {
-            return null
-        }
-        log.info(`Found ${tags.length} existing tag(s) for ${pluginName}`)
-        log.info(`Latest tag: ${latestTag}`)
-
-        return latestTag
-    } catch {
-        return null
-    }
-}
-
-function getGitDiff(pluginPath: string, sinceTag: string | null, repoRoot: string): string {
-    const relativePath = pluginPath.replace(repoRoot + "/", "")
-
-    try {
-        let diff: string
-
-        if (sinceTag) {
-            // Diff since last tag
-            diff = execSync(`git diff ${sinceTag}..HEAD -- "${relativePath}"`, {
-                cwd: repoRoot,
-                encoding: "utf-8",
-                maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large diffs
-            })
-        } else {
-            // No previous tag - get all commits for this plugin
-            // Use the first commit that touched this directory
-            const firstCommit = execSync(
-                `git log --oneline --diff-filter=A -- "${relativePath}" | tail -1 | cut -d' ' -f1`,
-                {
-                    cwd: repoRoot,
-                    encoding: "utf-8",
-                }
-            ).trim()
-
-            if (firstCommit) {
-                diff = execSync(`git diff ${firstCommit}^..HEAD -- "${relativePath}"`, {
-                    cwd: repoRoot,
-                    encoding: "utf-8",
-                    maxBuffer: 10 * 1024 * 1024,
-                })
-            } else {
-                // Fallback: just show current state
-                diff = execSync(`git diff --no-index /dev/null "${relativePath}" || true`, {
-                    cwd: repoRoot,
-                    encoding: "utf-8",
-                    maxBuffer: 10 * 1024 * 1024,
-                })
-            }
-        }
-
-        return diff.trim()
-    } catch (error) {
-        throw new Error(`Failed to get git diff: ${error instanceof Error ? error.message : String(error)}`)
-    }
-}
-
-function getCommitMessages(pluginPath: string, sinceTag: string | null, repoRoot: string): string {
-    const relativePath = pluginPath.replace(repoRoot + "/", "")
-
-    try {
-        let messages: string
-
-        if (sinceTag) {
-            messages = execSync(`git log ${sinceTag}..HEAD --oneline -- "${relativePath}"`, {
-                cwd: repoRoot,
-                encoding: "utf-8",
-            })
-        } else {
-            messages = execSync(`git log --oneline -- "${relativePath}"`, {
-                cwd: repoRoot,
-                encoding: "utf-8",
-            })
-        }
-
-        return messages.trim()
-    } catch {
-        return ""
-    }
-}
-
-// ============================================================================
-// AI Changelog Generation
-// ============================================================================
-
-interface OpenRouterResponse {
-    choices: {
-        message: {
-            content: string
-        }
-    }[]
-}
-
-async function generateChangelog(
-    pluginName: string,
-    diff: string,
-    commitMessages: string,
-    config: Config
-): Promise<string> {
-    // Truncate diff if too large (keep first 50k chars)
-    const maxDiffLength = 50000
-    const truncatedDiff =
-        diff.length > maxDiffLength ? diff.slice(0, maxDiffLength) + "\n\n[... diff truncated ...]" : diff
-
-    const prompt = `Generate a concise, user-facing changelog for a Framer plugin called "${pluginName}".
-
-Based on the following git diff and commit messages, create a changelog that:
-- Uses bullet points (- )
-- Focuses on FEATURES and FIXES that users care about, not implementation details
-- Groups related changes into ONE bullet point (e.g., if multiple commits implement "secondary locations", that's ONE feature)
-- Is written in past tense ("Added", "Fixed", "Improved")
-- Is very concise - typically 1-3 bullet points, max 5 for major releases
-- Avoids technical jargon - write for end users, not developers
-
-Bad example (too granular):
-- Added Locations data source
-- Added collection selector dropdown
-- Fixed slug generation
-- Enhanced collection reference handling
-
-Good example (grouped by feature):
-- Added support for secondary job locations
-- Fixed slug generation for international city names
-
-Commit messages:
-${commitMessages || "(no commit messages)"}
-
-Git diff:
-${truncatedDiff || "(no diff available)"}
-
-Respond with ONLY the changelog bullet points, no other text.`
-
-    log.info(`Generating changelog with ${config.openrouterModel}...`)
-
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${String(config.openrouterApiKey)}`,
-        },
-        body: JSON.stringify({
-            model: config.openrouterModel,
-            messages: [{ role: "user", content: prompt }],
-            max_tokens: 1000,
-        }),
-    })
-
-    if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText}\n${errorText}`)
-    }
-
-    const data = (await response.json()) as OpenRouterResponse
-    const changelog = data.choices[0]?.message.content.trim()
-
-    if (!changelog) {
-        throw new Error("Failed to generate changelog: empty response from AI")
-    }
-
-    return changelog
 }
 
 // ============================================================================
@@ -514,12 +319,7 @@ async function packPlugin(pluginPath: string): Promise<string> {
 // Framer API Submission
 // ============================================================================
 
-async function submitPlugin(
-    pluginInfo: PluginInfo,
-    plugin: Plugin,
-    changelog: string,
-    config: Config
-): Promise<SubmissionResponse> {
+async function submitPlugin(pluginInfo: PluginInfo, plugin: Plugin, config: Config): Promise<SubmissionResponse> {
     if (!config.sessionToken || !config.framerAdminSecret) {
         throw new Error("Session token and Framer admin secret are required for submission")
     }
@@ -533,7 +333,7 @@ async function submitPlugin(
 
     const formData = new FormData()
     formData.append("file", blob, "plugin.zip")
-    formData.append("content", changelog)
+    formData.append("content", config.changelog)
 
     const response = await fetch(url, {
         method: "POST",
@@ -609,7 +409,6 @@ interface SlackWorkflowPayload {
 async function sendSlackNotification(
     pluginInfo: PluginInfo,
     submissionResult: SubmissionResponse,
-    changelog: string,
     config: Config
 ): Promise<void> {
     const payload: SlackWorkflowPayload = {
@@ -617,7 +416,7 @@ async function sendSlackNotification(
         pluginVersion: submissionResult.version,
         marketplacePreviewUrl: `${config.urls.marketplaceBaseUrl}/plugins/${submissionResult.slug}/preview`,
         pluginReviewUrl: `${config.urls.framerAppUrl}/projects/new?plugin=${submissionResult.internalPluginId}&pluginVersion=${submissionResult.versionId}`,
-        changelog,
+        changelog: config.changelog,
     }
 
     // Only include retoolUrl if configured
@@ -687,7 +486,6 @@ async function main(): Promise<void> {
     log.step("Configuration")
     const config = getConfig()
     let pluginInfo: PluginInfo | undefined
-    let changelog = ""
     // REPO_ROOT can be overridden when script is run from a different repo
     const repoRoot = process.env.REPO_ROOT ?? resolve(__dirname, "..")
 
@@ -696,7 +494,6 @@ async function main(): Promise<void> {
         log.info(`Environment: ${config.framerEnv}`)
         log.info(`API base: ${config.urls.creatorsApiBase}`)
         log.info(`Dry run: ${String(config.dryRun)}`)
-        log.info(`AI model: ${config.openrouterModel}`)
 
         // 2. Validate plugin path exists
         if (!existsSync(config.pluginPath)) {
@@ -737,36 +534,9 @@ async function main(): Promise<void> {
         const plugin = matchedPlugin
         log.info(`Found plugin with database ID: ${plugin.id}`)
 
-        // 6. Get or generate changelog
-        if (config.changelog) {
-            log.step("Using Provided Changelog")
-            changelog = config.changelog
-            log.info(`Changelog:\n${changelog}`)
-        } else {
-            log.step("Analyzing Changes")
-            const lastTag = getLastTagForPlugin(pluginInfo.name, repoRoot)
-
-            if (lastTag) {
-                log.info(`Last release: ${lastTag}`)
-                const diff = getGitDiff(config.pluginPath, lastTag, repoRoot)
-                const commitMessages = getCommitMessages(config.pluginPath, lastTag, repoRoot)
-
-                if (!diff && !commitMessages) {
-                    throw new Error("No changes detected since last release. Nothing to submit.")
-                }
-
-                log.info(`Diff size: ${diff.length} chars`)
-                log.info(`Commits: ${commitMessages.split("\n").filter(Boolean).length}`)
-
-                // Generate changelog with AI
-                log.step("Generating Changelog with AI")
-                changelog = await generateChangelog(pluginInfo.name, diff, commitMessages, config)
-                log.info(`Generated changelog:\n${changelog}`)
-            } else {
-                log.info("No previous release found - this will be the first version")
-                changelog = "First release"
-            }
-        }
+        // 6. Log changelog
+        log.step("Changelog")
+        log.info(`Changelog:\n${config.changelog}`)
 
         // 7. Build & Pack the plugin
         log.step("Building & Packing Plugin")
@@ -778,10 +548,10 @@ async function main(): Promise<void> {
         if (config.dryRun) {
             log.step("DRY RUN - Skipping Submission")
             log.info("Plugin is built and packed. Would submit to API in real run.")
-            log.info(`Would submit with changelog:\n${changelog}`)
+            log.info(`Would submit with changelog:\n${config.changelog}`)
         } else {
             log.step("Submitting to Framer API")
-            submissionResult = await submitPlugin(pluginInfo, plugin, changelog, config)
+            submissionResult = await submitPlugin(pluginInfo, plugin, config)
         }
 
         // 9. Create git tag (unless dry run)
@@ -790,13 +560,13 @@ async function main(): Promise<void> {
             log.info("Would create git tag in real run.")
         } else if (submissionResult) {
             log.step("Creating Git Tag")
-            createGitTag(pluginInfo.name, submissionResult.version, changelog, repoRoot)
+            createGitTag(pluginInfo.name, submissionResult.version, config.changelog, repoRoot)
         }
 
         // 10. Send Slack notification (only on successful submission)
         if (config.slackWebhookUrl && submissionResult) {
             log.step("Sending Slack Notification")
-            await sendSlackNotification(pluginInfo, submissionResult, changelog, config)
+            await sendSlackNotification(pluginInfo, submissionResult, config)
         }
 
         console.log("\n" + "=".repeat(60))
