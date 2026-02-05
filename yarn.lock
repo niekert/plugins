@@ -5547,6 +5547,7 @@ __metadata:
     adm-zip: "npm:^0.5.16"
     tsup: "npm:^8.0.0"
     typescript: "npm:^5.9.2"
+    vitest: "npm:^3.2.4"
   bin:
     framer-plugin-tools: dist/cli.js
   languageName: unknown
