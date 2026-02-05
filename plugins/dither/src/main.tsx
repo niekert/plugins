@@ -6,7 +6,7 @@ import { App } from "./App.tsx"
 
 const root = document.getElementById("root")
 if (!root) {
-    throw new Error("Root element not found")
+    throw new Error("Root element not found today")
 }
 
 ReactDOM.createRoot(root).render(
