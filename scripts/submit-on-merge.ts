@@ -33,12 +33,15 @@ const PLUGINS_DIR = join(REPO_ROOT, "plugins")
 // Logging
 // ============================================================================
 
+const DEBUG = process.env.DEBUG === "1" || process.env.DEBUG === "true"
+
 const log = {
     info: (msg: string) => console.log(`[INFO] ${msg}`),
     success: (msg: string) => console.log(`[SUCCESS] ${msg}`),
     error: (msg: string) => console.error(`[ERROR] ${msg}`),
     warn: (msg: string) => console.warn(`[WARN] ${msg}`),
     step: (msg: string) => console.log(`\n=== ${msg} ===`),
+    debug: (msg: string) => DEBUG && console.log(`[DEBUG] ${msg}`),
 }
 
 // ============================================================================
@@ -120,12 +123,18 @@ async function main(): Promise<void> {
     const prBody = readFileSync(prBodyFile, "utf-8")
 
     log.info(`Dry run: ${process.env.DRY_RUN === "true" ? "yes" : "no"}`)
+    log.debug(`PR body file: ${prBodyFile}`)
+    log.debug(`PR body length: ${prBody.length} chars`)
+    log.debug(`PR body (first 500 chars):\n${prBody.slice(0, 500)}`)
+    log.debug(`PR body contains '### Changelog': ${prBody.includes("### Changelog") || prBody.includes("### changelog")}`)
 
     // 2. Extract changelog from PR body
     log.step("Extracting Changelog")
     const changelog = extractChangelog(prBody)
+    log.debug(`Extracted changelog: ${changelog ? `"${changelog.slice(0, 200)}..."` : "null"}`)
 
     if (!changelog) {
+        log.error(`Full PR body for debugging:\n---\n${prBody}\n---`)
         throw new Error("No changelog found in PR body. Expected a '### Changelog' section with content.")
     }
 

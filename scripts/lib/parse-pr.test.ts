@@ -114,6 +114,63 @@ Some notes here.`
 
         expect(extractChangelog(prBody)).toBe("- Added feature with extra whitespace")
     })
+
+    it("extracts changelog with HTML comments (PR template)", () => {
+        const prBody = `### Description
+
+MAde some changes
+
+### Changelog
+
+<!-- Required when using the "Submit Plugin" label. Describe user-facing changes in bullet points. -->
+
+- Just testing changelog extraction
+- I hope its formatted nicely
+- It better be
+
+### Testing
+
+<!-- List of steps to verify the code this pull request changed. If it is a Plugin additions, what are the core workflows to test. If it is a bug fix, what are the steps to verify it is fixed -->
+
+- [x] Description of test case one
+  - [x] Step 1
+  - [x] Step 2
+  - [x] Step 3
+- [x] Description of test case two
+  - [x] Step 1
+  - [x] Step 2
+  - [x] Step 3
+
+<!-- Thank you for contributing! -->`
+
+        const result = extractChangelog(prBody)
+        expect(result).toContain("- Just testing changelog extraction")
+        expect(result).toContain("- I hope its formatted nicely")
+        expect(result).toContain("- It better be")
+    })
+
+    it("handles PR body with leading whitespace from YAML indentation", () => {
+        // This simulates what happens when YAML heredoc adds indentation
+        // The regex still matches, but captures too much because indented headings
+        // don't match the lookahead pattern
+        const prBody = `          ### Description
+
+          MAde some changes
+
+          ### Changelog
+
+          <!-- Required when using the "Submit Plugin" label. -->
+
+          - Just testing changelog extraction
+
+          ### Testing`
+
+        const result = extractChangelog(prBody)
+        // It finds content (not null) but includes ### Testing because it's indented
+        expect(result).toContain("Just testing changelog extraction")
+        // Bug: indented ### Testing is included because lookahead doesn't match
+        expect(result).toContain("### Testing")
+    })
 })
 
 describe("parseChangedPlugins", () => {
