@@ -9,8 +9,8 @@ on:
         required: true
         type: string
       changelog:
-        description: 'Changelog (leave empty to auto-generate with AI)'
-        required: false
+        description: 'Changelog for this release'
+        required: true
         type: string
       environment:
         description: 'Environment (development/production)'
@@ -34,8 +34,8 @@ on:
         required: true
         type: string
       changelog:
-        description: 'Changelog (leave empty to auto-generate with AI)'
-        required: false
+        description: 'Changelog for this release'
+        required: true
         type: string
       environment:
         description: 'Environment (development/production)'
@@ -56,9 +56,6 @@ on:
         required: true
       SLACK_WEBHOOK_URL:
         description: 'Slack webhook URL for notifications'
-        required: false
-      OPENROUTER_API_KEY:
-        description: 'OpenRouter API key for AI changelog generation'
         required: false
       RETOOL_URL:
         description: 'Retool dashboard URL for Slack notifications'
@@ -139,7 +136,6 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           ERROR_WEBHOOK_URL: ${{ secrets.ERROR_WEBHOOK_URL }}
           RETOOL_URL: ${{ secrets.RETOOL_URL }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           FRAMER_ENV: ${{ inputs.environment }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           DRY_RUN: ${{ inputs.dry_run }}
