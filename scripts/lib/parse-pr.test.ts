@@ -171,6 +171,32 @@ MAde some changes
         // Bug: indented ### Testing is included because lookahead doesn't match
         expect(result).toContain("### Testing")
     })
+
+    it("handles CRLF line endings from GitHub API", () => {
+        // GitHub's API can return PR bodies with Windows-style line endings
+        const prBody =
+            "### Description\r\n\r\nSome description\r\n\r\n### Changelog\r\n\r\n- Item one\r\n- Item two\r\n\r\n### Testing\r\n\r\n- Test case"
+
+        const result = extractChangelog(prBody)
+        expect(result).toContain("- Item one")
+        expect(result).toContain("- Item two")
+        expect(result).not.toContain("### Testing")
+    })
+
+    it("strips HTML comments from changelog", () => {
+        const prBody = `### Changelog
+
+<!-- This comment should be removed -->
+
+- Actual changelog item
+
+### Testing`
+
+        const result = extractChangelog(prBody)
+        expect(result).toBe("- Actual changelog item")
+        expect(result).not.toContain("<!--")
+        expect(result).not.toContain("-->")
+    })
 })
 
 describe("parseChangedPlugins", () => {
@@ -180,14 +206,12 @@ describe("parseChangedPlugins", () => {
     })
 
     it("returns unique plugin names when multiple files changed in same plugin", () => {
-        const changedFiles =
-            "plugins/airtable/src/App.tsx plugins/airtable/src/utils.ts plugins/airtable/package.json"
+        const changedFiles = "plugins/airtable/src/App.tsx plugins/airtable/src/utils.ts plugins/airtable/package.json"
         expect(parseChangedPlugins(changedFiles)).toEqual(["airtable"])
     })
 
     it("returns multiple plugins sorted alphabetically", () => {
-        const changedFiles =
-            "plugins/csv-import/src/index.ts plugins/airtable/src/App.tsx plugins/ashby/framer.json"
+        const changedFiles = "plugins/csv-import/src/index.ts plugins/airtable/src/App.tsx plugins/ashby/framer.json"
         expect(parseChangedPlugins(changedFiles)).toEqual(["airtable", "ashby", "csv-import"])
     })
 
