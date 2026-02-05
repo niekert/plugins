@@ -42,16 +42,16 @@ jobs:
         run: yarn build
 
       - name: Write PR body to file
-        run: |
-          cat <<'EOF' > /tmp/pr-body.txt
-          ${{ github.event.pull_request.body }}
-          EOF
+        run: cat <<< "$PR_BODY" > /tmp/pr-body.txt
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
 
       - name: Submit changed plugins
         run: |
           export CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
           yarn tsx scripts/submit-on-merge.ts
         env:
+          DEBUG: "1"
           PR_BODY_FILE: /tmp/pr-body.txt
           SESSION_TOKEN: ${{ secrets.SESSION_TOKEN }}
           FRAMER_ADMIN_SECRET: ${{ secrets.FRAMER_ADMIN_SECRET }}
