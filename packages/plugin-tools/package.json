@@ -24,6 +24,9 @@
     "scripts": {
         "build": "tsup",
         "check-vitest": "run g:check-vitest",
+        "check-biome": "run g:check-biome",
+        "check-eslint": "run g:check-eslint",
+        "check-typescript": "run g:check-typescript",
         "prepublishOnly": "yarn run build"
     },
     "author": "",
