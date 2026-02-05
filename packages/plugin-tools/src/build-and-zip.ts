@@ -40,9 +40,35 @@ export function zipDistFolder(options: ZipDistFolderOptions): string {
     return zipPath
 }
 
+/**
+ * Naive package manager detection by checking for lock files in the current directory and parent directories.
+ * @param cwd
+ * @returns
+ */
+export function detectPackageManager(cwd: string): string {
+    let dir = cwd
+    for (let i = 0; i < 3; i++) {
+        const hasFile = (name: string) => fs.existsSync(path.join(dir, name))
+
+        if (hasFile("yarn.lock")) return "yarn"
+        if (hasFile("pnpm-lock.yaml")) return "pnpm"
+        if (hasFile("bun.lockb") || hasFile("bun.lock")) return "bun"
+        if (hasFile("package-lock.json")) return "npm"
+
+        const parent = path.dirname(dir)
+        if (parent === dir) break
+        dir = parent
+    }
+    return "npm"
+}
+
 export function runBuildScript(cwd: string): Promise<void> {
+    const packageManager = detectPackageManager(cwd)
+    console.log(`Detected package manager: ${packageManager}`)
+    const buildCommand = `${packageManager} run build`
+
     return new Promise((resolve, reject) => {
-        const buildProcess = exec("npm run build", { cwd })
+        const buildProcess = exec(buildCommand, { cwd })
 
         buildProcess.stdout?.on("data", (data: string) => process.stdout.write(data))
         buildProcess.stderr?.on("data", (data: string) => process.stderr.write(data))

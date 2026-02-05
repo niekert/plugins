@@ -5,7 +5,7 @@ async function run() {
     switch (command) {
         case "prepare":
         case "pack": {
-            const cwd = process.cwd()
+            const cwd = process.env.INIT_CWD ?? process.cwd()
 
             console.log("Building your Plugin…")
             await runBuildScript(cwd)
