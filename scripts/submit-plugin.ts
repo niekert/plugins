@@ -25,22 +25,95 @@ import { runBuildScript, zipDistFolder } from "framer-plugin-tools"
 import { execSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
+import * as v from "valibot"
+
+// ============================================================================
+// Schemas - Environment Variables
+// ============================================================================
+
+const FramerEnvSchema = v.picklist(["production", "development"])
+
+const EnvSchema = v.object({
+    PLUGIN_PATH: v.pipe(v.string(), v.minLength(1)),
+    CHANGELOG: v.pipe(v.string(), v.minLength(1)),
+    SESSION_TOKEN: v.optional(v.string()),
+    FRAMER_ADMIN_SECRET: v.optional(v.string()),
+    SLACK_WEBHOOK_URL: v.optional(v.string()),
+    ERROR_WEBHOOK_URL: v.optional(v.string()),
+    RETOOL_URL: v.optional(v.string()),
+    GITHUB_RUN_URL: v.optional(v.string()),
+    FRAMER_ENV: v.optional(FramerEnvSchema, "production"),
+    DRY_RUN: v.optional(v.string()),
+    REPO_ROOT: v.optional(v.string()),
+})
+
+// ============================================================================
+// Schemas - API Responses
+// ============================================================================
+
+const AccessTokenResponseSchema = v.object({
+    accessToken: v.string(),
+    expiresAt: v.string(),
+    expiresInSeconds: v.number(),
+})
+
+const PluginVersionSchema = v.object({
+    id: v.string(),
+    name: v.string(),
+    modes: v.array(v.string()),
+    icon: v.nullable(v.string()),
+    prettyVersion: v.number(),
+    status: v.string(),
+    releaseNotes: v.nullable(v.string()),
+    reviewedAt: v.nullable(v.string()),
+    url: v.string(),
+    createdAt: v.string(),
+})
+
+const PluginSchema = v.object({
+    id: v.string(),
+    manifestId: v.string(),
+    description: v.nullable(v.string()),
+    ownerType: v.string(),
+    ownerId: v.string(),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+    external: v.boolean(),
+    currentVersion: v.nullable(PluginVersionSchema),
+    lastCreatedVersion: v.nullable(PluginVersionSchema),
+})
+type Plugin = v.InferOutput<typeof PluginSchema>
+
+const PluginsResponseSchema = v.object({
+    plugins: v.array(PluginSchema),
+})
+
+const SubmissionResponseSchema = v.object({
+    version: v.number(),
+    // FIXME: THIS SHOULD BE DEPLOYED:
+    // SEE: https://github.com/framer/creators/pull/2487/files
+    versionId: v.fallback(v.string(), ""),
+    internalPluginId: v.string(),
+    slug: v.string(),
+})
+type SubmissionResponse = v.InferOutput<typeof SubmissionResponseSchema>
+
+// ============================================================================
+// Schemas - File Contents
+// ============================================================================
+
+const FramerJsonSchema = v.object({
+    id: v.string(),
+    name: v.string(),
+})
+
+const PluginPackageJsonSchema = v.object({
+    name: v.string(),
+})
 
 // ============================================================================
 // Types
 // ============================================================================
-
-interface FramerJson {
-    id: string
-    name: string
-    modes: string[]
-    icon: string
-}
-
-interface PluginPackageJson {
-    name: string
-    version?: string
-}
 
 interface PluginInfo {
     id: string
@@ -50,11 +123,13 @@ interface PluginInfo {
     zipPath: string
 }
 
-interface SubmissionResponse {
-    version: string
-    versionId: string
-    internalPluginId: string
-    slug: string
+type FramerEnv = v.InferOutput<typeof FramerEnvSchema>
+
+interface EnvironmentUrls {
+    apiBase: string
+    creatorsApiBase: string
+    framerAppUrl: string
+    marketplaceBaseUrl: string
 }
 
 interface Config {
@@ -69,55 +144,6 @@ interface Config {
     framerEnv: FramerEnv
     urls: EnvironmentUrls
     dryRun: boolean
-}
-
-interface AccessTokenResponse {
-    accessToken: string
-    expiresAt: string
-    expiresInSeconds: number
-}
-
-interface PluginVersion {
-    id: string
-    name: string
-    modes: string[]
-    icon: string | null
-    prettyVersion: number
-    status: string
-    releaseNotes: string | null
-    reviewedAt: string | null
-    url: string
-    createdAt: string
-}
-
-interface Plugin {
-    id: string
-    manifestId: string
-    description: string | null
-    ownerType: string
-    ownerId: string
-    createdAt: string
-    updatedAt: string
-    external: boolean
-    currentVersion: PluginVersion | null
-    lastCreatedVersion: PluginVersion | null
-}
-
-interface PluginsResponse {
-    plugins: Plugin[]
-}
-
-// ============================================================================
-// Environment Configuration
-// ============================================================================
-
-type FramerEnv = "production" | "development"
-
-interface EnvironmentUrls {
-    apiBase: string
-    creatorsApiBase: string
-    framerAppUrl: string
-    marketplaceBaseUrl: string
 }
 
 const ENVIRONMENT_URLS: Record<FramerEnv, EnvironmentUrls> = {
@@ -159,57 +185,41 @@ const log = {
 // ============================================================================
 
 function getConfig(): Config {
-    const pluginPath = process.env.PLUGIN_PATH
-    const changelog = process.env.CHANGELOG?.trim()
-    const sessionToken = process.env.SESSION_TOKEN
-    const framerAdminSecret = process.env.FRAMER_ADMIN_SECRET
-    const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL
-    const errorWebhookUrl = process.env.ERROR_WEBHOOK_URL
-    const retoolUrl = process.env.RETOOL_URL
-    const githubRunUrl = process.env.GITHUB_RUN_URL
     const dryRun = process.env.DRY_RUN === "true"
 
-    // Environment configuration
-    const framerEnvInput = process.env.FRAMER_ENV ?? "production"
-    if (framerEnvInput !== "production" && framerEnvInput !== "development") {
-        throw new Error(`Invalid FRAMER_ENV: "${framerEnvInput}". Must be "production" or "development".`)
-    }
-    const framerEnv: FramerEnv = framerEnvInput
-    const envUrls = ENVIRONMENT_URLS[framerEnv]
+    // Build the schema dynamically based on dryRun
+    const schema = dryRun
+        ? EnvSchema
+        : v.object({
+              ...EnvSchema.entries,
+              SESSION_TOKEN: v.pipe(v.string(), v.minLength(1)),
+              FRAMER_ADMIN_SECRET: v.pipe(v.string(), v.minLength(1)),
+          })
 
-    const missing: string[] = []
+    const result = v.safeParse(schema, process.env)
 
-    if (!pluginPath) missing.push("PLUGIN_PATH")
-    if (!changelog) missing.push("CHANGELOG")
-
-    if (!dryRun) {
-        if (!sessionToken) missing.push("SESSION_TOKEN")
-        if (!framerAdminSecret) missing.push("FRAMER_ADMIN_SECRET")
-    }
-
-    if (missing.length > 0) {
-        throw new Error(`Missing required environment variables: ${missing.join(", ")}`)
+    if (!result.success) {
+        const issues = result.issues.map(issue => {
+            const path = issue.path?.map(p => p.key).join(".") ?? "unknown"
+            return `${path}: ${issue.message}`
+        })
+        throw new Error(`Invalid environment variables:\n${issues.join("\n")}`)
     }
 
-    // TypeScript can't narrow based on the missing array check, so add explicit guards
-    if (!pluginPath) {
-        throw new Error("PLUGIN_PATH is required")
-    }
-    if (!changelog) {
-        throw new Error("CHANGELOG is required")
-    }
+    const env = result.output
+    const framerEnv = env.FRAMER_ENV ?? "production"
 
     return {
-        pluginPath: resolve(pluginPath),
-        changelog,
-        sessionToken,
-        framerAdminSecret,
-        slackWebhookUrl,
-        errorWebhookUrl,
-        retoolUrl,
-        githubRunUrl,
+        pluginPath: resolve(env.PLUGIN_PATH),
+        changelog: env.CHANGELOG.trim(),
+        sessionToken: env.SESSION_TOKEN,
+        framerAdminSecret: env.FRAMER_ADMIN_SECRET,
+        slackWebhookUrl: env.SLACK_WEBHOOK_URL,
+        errorWebhookUrl: env.ERROR_WEBHOOK_URL,
+        retoolUrl: env.RETOOL_URL,
+        githubRunUrl: env.GITHUB_RUN_URL,
         framerEnv,
-        urls: envUrls,
+        urls: ENVIRONMENT_URLS[framerEnv],
         dryRun,
     }
 }
@@ -236,7 +246,7 @@ async function getAccessToken(config: Config): Promise<string> {
         throw new Error(`Failed to get access token: ${response.statusText}`)
     }
 
-    const data = (await response.json()) as AccessTokenResponse
+    const data = v.parse(AccessTokenResponseSchema, await response.json())
     return data.accessToken
 }
 
@@ -256,7 +266,7 @@ async function fetchMyPlugins(config: Config): Promise<Plugin[]> {
         throw new Error(`Failed to fetch plugins: ${response.statusText}`)
     }
 
-    const data = (await response.json()) as PluginsResponse
+    const data = v.parse(PluginsResponseSchema, await response.json())
     return data.plugins
 }
 
@@ -276,20 +286,8 @@ function loadPluginInfo(pluginPath: string): PluginInfo {
         throw new Error(`package.json not found at ${packageJsonPath}`)
     }
 
-    const framerJson = JSON.parse(readFileSync(framerJsonPath, "utf-8")) as FramerJson
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as PluginPackageJson
-
-    if (!framerJson.id) {
-        throw new Error("framer.json is missing 'id' field")
-    }
-
-    if (!framerJson.name) {
-        throw new Error("framer.json is missing 'name' field")
-    }
-
-    if (!packageJson.name) {
-        throw new Error("package.json is missing 'name' field")
-    }
+    const framerJson = v.parse(FramerJsonSchema, JSON.parse(readFileSync(framerJsonPath, "utf-8")))
+    const packageJson = v.parse(PluginPackageJsonSchema, JSON.parse(readFileSync(packageJsonPath, "utf-8")))
 
     return {
         id: framerJson.id,
@@ -349,7 +347,7 @@ async function submitPlugin(pluginInfo: PluginInfo, plugin: Plugin, config: Conf
         throw new Error(`API submission failed: ${response.status} ${response.statusText}\n${errorText}`)
     }
 
-    const result = (await response.json()) as SubmissionResponse
+    const result = v.parse(SubmissionResponseSchema, await response.json())
     log.success(`Submitted! Version: ${result.version}`)
 
     return result
@@ -359,8 +357,8 @@ async function submitPlugin(pluginInfo: PluginInfo, plugin: Plugin, config: Conf
 // Git Tagging
 // ============================================================================
 
-function createGitTag(pluginName: string, version: string, changelog: string, repoRoot: string): void {
-    const tagName = `${pluginName.toLowerCase().replace(/\s+/g, "-")}-v${version}`
+function createGitTag(pluginName: string, version: number, changelog: string, repoRoot: string): void {
+    const tagName = `${pluginName.toLowerCase().replace(/\s+/g, "-")}-v${version.toString()}`
 
     log.info(`Creating git tag: ${tagName}`)
 
@@ -413,7 +411,7 @@ async function sendSlackNotification(
 ): Promise<void> {
     const payload: SlackWorkflowPayload = {
         pluginName: pluginInfo.name,
-        pluginVersion: submissionResult.version,
+        pluginVersion: submissionResult.version.toString(),
         marketplacePreviewUrl: `${config.urls.marketplaceBaseUrl}/plugins/${submissionResult.slug}/preview`,
         pluginReviewUrl: `${config.urls.framerAppUrl}/projects/new?plugin=${submissionResult.internalPluginId}&pluginVersion=${submissionResult.versionId}`,
         changelog: config.changelog,

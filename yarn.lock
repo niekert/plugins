@@ -6523,6 +6523,7 @@ __metadata:
     tsx: "npm:^4.19.0"
     turbo: "npm:^2.5.6"
     typescript: "npm:^5.9.2"
+    valibot: "npm:^1.2.0"
     vite: "npm:^7.1.11"
     vitest: "npm:^3.2.4"
   languageName: unknown
