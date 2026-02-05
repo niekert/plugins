@@ -1,12 +1,12 @@
-import React from "react"
-import "framer-plugin/framer.css"
 import { $framerInternal, framer } from "framer-plugin"
+import "framer-plugin/framer.css"
+import React from "react"
 import ReactDOM from "react-dom/client"
 import { App } from "./App.tsx"
 import { MiniRouterProvider } from "./minirouter.tsx"
 
 const root = document.getElementById("root")
-if (!root) throw new Error("Root element not found")
+if (!root) throw new Error("Root element not found in DOM")
 
 const collection = await framer.getActiveCollection()
 if (collection && collection.managedBy !== "user") {
