@@ -105,6 +105,18 @@ Some notes here.`
         expect(extractChangelog(prBody)).toBe("- Fixed bug")
     })
 
+    it("supports plain text content (not just bullet lists)", () => {
+        const prBody = `### Changelog
+
+Fixed a critical bug in the authentication flow that was causing users to be logged out unexpectedly.
+
+### Testing`
+
+        expect(extractChangelog(prBody)).toBe(
+            "Fixed a critical bug in the authentication flow that was causing users to be logged out unexpectedly."
+        )
+    })
+
     it("trims whitespace from changelog content", () => {
         const prBody = `### Changelog
 
@@ -122,7 +134,7 @@ MAde some changes
 
 ### Changelog
 
-<!-- Required when using the "Submit Plugin" label. Describe user-facing changes in bullet points. -->
+<!-- Required when using the "Submit on merge" label. Describe user-facing changes in bullet points. -->
 
 - Just testing changelog extraction
 - I hope its formatted nicely
@@ -159,7 +171,7 @@ MAde some changes
 
           ### Changelog
 
-          <!-- Required when using the "Submit Plugin" label. -->
+          <!-- Required when using the "Submit on merge" label. -->
 
           - Just testing changelog extraction
 

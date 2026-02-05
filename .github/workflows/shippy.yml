@@ -26,13 +26,13 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false && github.event.pull_request.user.login != 'dependabot[bot]'
     steps:
-      - name: Check if Submit Plugin label is present
+      - name: Check if Submit on merge label is present
         id: check-label
         uses: actions/github-script@v7
         with:
           script: |
             const labels = context.payload.pull_request.labels || []
-            const hasSubmitLabel = labels.some(label => label.name === 'Submit Plugin')
+            const hasSubmitLabel = labels.some(label => label.name === 'Submit on merge')
             core.setOutput('require_changelog', hasSubmitLabel ? 'true' : 'false')
 
       - name: Checkout repository
