@@ -15,13 +15,24 @@ export function extractChangelog(prBody: string): string | null {
         return null
     }
 
+    // Normalize line endings (GitHub API can return CRLF)
+    const normalizedBody = prBody.replace(/\r\n/g, "\n")
+
     // Match ### Changelog section until next heading (## or ###) or end of string
     // Use [ \t]* instead of \s* to avoid matching newlines before the capture group
     const changelogPattern = /### Changelog[ \t]*\n([\s\S]*?)(?=\n### |\n## |$)/i
-    const match = prBody.match(changelogPattern)
-    const changelog = match?.[1]?.trim()
+    const match = normalizedBody.match(changelogPattern)
+    let changelog = match?.[1]?.trim()
 
     // Return null for empty or placeholder content
+    if (!changelog || changelog === "-") {
+        return null
+    }
+
+    // Strip HTML comments (from PR templates)
+    changelog = changelog.replace(/<!--[\s\S]*?-->/g, "").trim()
+
+    // Check again after stripping comments
     if (!changelog || changelog === "-") {
         return null
     }
