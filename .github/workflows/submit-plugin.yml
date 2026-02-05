@@ -105,7 +105,7 @@ jobs:
         run: yarn install
 
       - name: Build framer-plugin-tools
-        run: yarn build
+        run: yarn turbo run build --filter=framer-plugin-tools
 
       - name: Submit plugin
         run: yarn tsx scripts/submit-plugin.ts

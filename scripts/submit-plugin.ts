@@ -134,6 +134,7 @@ interface EnvironmentUrls {
 
 interface Config {
     pluginPath: string
+    pluginFileName: string
     changelog: string
     sessionToken: string | undefined
     framerAdminSecret: string | undefined
@@ -211,6 +212,7 @@ function getConfig(): Config {
 
     return {
         pluginPath: resolve(env.PLUGIN_PATH),
+        pluginFileName: "plugin.zip",
         changelog: env.CHANGELOG.trim(),
         sessionToken: env.SESSION_TOKEN,
         framerAdminSecret: env.FRAMER_ADMIN_SECRET,
@@ -274,7 +276,7 @@ async function fetchMyPlugins(config: Config): Promise<Plugin[]> {
 // Plugin Operations
 // ============================================================================
 
-function loadPluginInfo(pluginPath: string): PluginInfo {
+function loadPluginInfo({ pluginPath, pluginFileName }: Config): PluginInfo {
     const framerJsonPath = join(pluginPath, "framer.json")
     const packageJsonPath = join(pluginPath, "package.json")
 
@@ -294,11 +296,11 @@ function loadPluginInfo(pluginPath: string): PluginInfo {
         name: framerJson.name,
         workspaceName: packageJson.name,
         path: pluginPath,
-        zipPath: join(pluginPath, "plugin.zip"),
+        zipPath: join(pluginPath, pluginFileName),
     }
 }
 
-async function packPlugin(pluginPath: string): Promise<string> {
+async function packPlugin({ pluginPath, pluginFileName }: Config): Promise<string> {
     log.info("Building plugin...")
     await runBuildScript(pluginPath)
 
@@ -306,7 +308,7 @@ async function packPlugin(pluginPath: string): Promise<string> {
     const zipPath = zipDistFolder({
         cwd: pluginPath,
         distPath: "dist",
-        zipFileName: "plugin.zip",
+        zipFileName: pluginFileName,
     })
 
     log.success(`Created: ${zipPath}`)
@@ -330,7 +332,7 @@ async function submitPlugin(pluginInfo: PluginInfo, plugin: Plugin, config: Conf
     const blob = new Blob([zipBuffer], { type: "application/zip" })
 
     const formData = new FormData()
-    formData.append("file", blob, "plugin.zip")
+    formData.append("file", blob, config.pluginFileName)
     formData.append("content", config.changelog)
 
     const response = await fetch(url, {
@@ -357,7 +359,7 @@ async function submitPlugin(pluginInfo: PluginInfo, plugin: Plugin, config: Conf
 // Git Tagging
 // ============================================================================
 
-function createGitTag(pluginName: string, version: number, changelog: string, repoRoot: string): void {
+function createGitTag(pluginName: string, version: number, repoRoot: string, config: Config): void {
     const tagName = `${pluginName.toLowerCase().replace(/\s+/g, "-")}-v${version.toString()}`
 
     log.info(`Creating git tag: ${tagName}`)
@@ -372,7 +374,7 @@ function createGitTag(pluginName: string, version: number, changelog: string, re
         }
 
         // Create annotated tag with changelog as message
-        const escapedChangelog = changelog.replace(/'/g, "'\\''")
+        const escapedChangelog = config.changelog.replace(/'/g, "'\\''")
         execSync(`git tag -a "${tagName}" -m '${escapedChangelog}'`, {
             cwd: repoRoot,
             stdio: "inherit",
@@ -415,11 +417,7 @@ async function sendSlackNotification(
         marketplacePreviewUrl: `${config.urls.marketplaceBaseUrl}/plugins/${submissionResult.slug}/preview`,
         pluginReviewUrl: `${config.urls.framerAppUrl}/projects/new?plugin=${submissionResult.internalPluginId}&pluginVersion=${submissionResult.versionId}`,
         changelog: config.changelog,
-    }
-
-    // Only include retoolUrl if configured
-    if (config.retoolUrl) {
-        payload.retoolUrl = config.retoolUrl
+        retoolUrl: config.retoolUrl,
     }
 
     if (!config.slackWebhookUrl) return
@@ -477,10 +475,9 @@ async function sendErrorNotification(
 
 async function main(): Promise<void> {
     console.log("=".repeat(60))
-    console.log("Framer Plugin Submission Script")
+    console.log("Submitting Plugin to Framer Marketplace")
     console.log("=".repeat(60))
 
-    // 1. Load configuration
     log.step("Configuration")
     const config = getConfig()
     let pluginInfo: PluginInfo | undefined
@@ -493,31 +490,17 @@ async function main(): Promise<void> {
         log.info(`API base: ${config.urls.creatorsApiBase}`)
         log.info(`Dry run: ${String(config.dryRun)}`)
 
-        // 2. Validate plugin path exists
         if (!existsSync(config.pluginPath)) {
             throw new Error(`Plugin path does not exist: ${config.pluginPath}`)
         }
 
-        // 3. Install plugin dependencies
-        log.step("Installing Plugin Dependencies")
-        try {
-            execSync("yarn install", {
-                cwd: config.pluginPath,
-                stdio: "inherit",
-            })
-            log.success("Dependencies installed")
-        } catch (error) {
-            throw new Error(`Yarn install failed: ${error instanceof Error ? error.message : String(error)}`)
-        }
-
-        // 4. Load plugin info
         log.step("Loading Plugin Info")
-        pluginInfo = loadPluginInfo(config.pluginPath)
+        pluginInfo = loadPluginInfo(config)
         log.info(`Name: ${pluginInfo.name}`)
         log.info(`Manifest ID: ${pluginInfo.id}`)
         log.info(`Workspace: ${pluginInfo.workspaceName}`)
 
-        // 5. Fetch user's plugins to find the database plugin ID
+        // 4. Fetch user's plugins to find the database plugin ID
         log.step("Fetching Plugin from Framer")
         const plugins = await fetchMyPlugins(config)
         const matchedPlugin = plugins.find(p => p.manifestId === pluginInfo?.id)
@@ -530,17 +513,14 @@ async function main(): Promise<void> {
         }
 
         const plugin = matchedPlugin
-        log.info(`Found plugin with database ID: ${plugin.id}`)
+        log.info(`Found plugin with ID: ${plugin.id}`)
 
-        // 6. Log changelog
         log.step("Changelog")
         log.info(`Changelog:\n${config.changelog}`)
 
-        // 7. Build & Pack the plugin
         log.step("Building & Packing Plugin")
-        await packPlugin(config.pluginPath)
+        await packPlugin(config)
 
-        // 8. Submit (unless dry run)
         let submissionResult: SubmissionResponse | undefined
 
         if (config.dryRun) {
@@ -552,16 +532,14 @@ async function main(): Promise<void> {
             submissionResult = await submitPlugin(pluginInfo, plugin, config)
         }
 
-        // 9. Create git tag (unless dry run)
         if (config.dryRun) {
             log.step("DRY RUN - Skipping Git Tag")
             log.info("Would create git tag in real run.")
         } else if (submissionResult) {
             log.step("Creating Git Tag")
-            createGitTag(pluginInfo.name, submissionResult.version, config.changelog, repoRoot)
+            createGitTag(pluginInfo.name, submissionResult.version, repoRoot, config)
         }
 
-        // 10. Send Slack notification (only on successful submission)
         if (config.slackWebhookUrl && submissionResult) {
             log.step("Sending Slack Notification")
             await sendSlackNotification(pluginInfo, submissionResult, config)
