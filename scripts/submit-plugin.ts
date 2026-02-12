@@ -9,7 +9,8 @@
  *
  * Environment Variables:
  *   PLUGIN_PATH         - Path to the plugin directory (required)
- *   CHANGELOG           - Changelog text (required)
+ *   CHANGELOG           - Changelog text (required unless PR_BODY is set)
+ *   PR_BODY             - Full PR body — changelog will be extracted (alternative to CHANGELOG)
  *   SESSION_TOKEN       - Framer session cookie (required unless DRY_RUN)
  *   FRAMER_ADMIN_SECRET - Framer admin API key (required unless DRY_RUN)
  *   SLACK_WEBHOOK_URL   - Slack workflow webhook for success notifications (optional)
@@ -26,6 +27,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { runPluginBuildScript, zipPluginDistribution } from "framer-plugin-tools"
 import * as v from "valibot"
+import { extractChangelog } from "./lib/parse-pr"
 
 // ============================================================================
 // Schemas - Environment Variables
@@ -40,7 +42,8 @@ const BooleanEnvSchema = v.pipe(
 
 const EnvSchema = v.object({
     PLUGIN_PATH: v.pipe(v.string(), v.minLength(1)),
-    CHANGELOG: v.pipe(v.string(), v.minLength(1)),
+    CHANGELOG: v.optional(v.string()),
+    PR_BODY: v.optional(v.string()),
     SLACK_WEBHOOK_URL: v.optional(v.string()),
     SLACK_ERROR_WEBHOOK_URL: v.optional(v.string()),
     RETOOL_URL: v.optional(v.string()),
@@ -244,7 +247,12 @@ function loadFramerJsonFile(pluginPath: string): FramerJson {
     return framerJson
 }
 
-async function submitPlugin(zipFilePath: string, plugin: Plugin, env: Environment): Promise<SubmissionResponse> {
+async function submitPlugin(
+    zipFilePath: string,
+    plugin: Plugin,
+    env: Environment,
+    changelog: string
+): Promise<SubmissionResponse> {
     if (!env.SESSION_TOKEN || !env.FRAMER_ADMIN_SECRET) {
         throw new Error("Session token and Framer admin secret are required for submission")
     }
@@ -258,7 +266,7 @@ async function submitPlugin(zipFilePath: string, plugin: Plugin, env: Environmen
 
     const formData = new FormData()
     formData.append("file", blob, "plugin.zip")
-    formData.append("content", env.CHANGELOG)
+    formData.append("content", changelog)
 
     const response = await fetch(url, {
         method: "POST",
@@ -284,7 +292,7 @@ async function submitPlugin(zipFilePath: string, plugin: Plugin, env: Environmen
 // Git Tagging
 // ============================================================================
 
-function createGitTag(pluginName: string, version: number, repoRoot: string, env: Environment): void {
+function createGitTag(pluginName: string, version: number, repoRoot: string, changelog: string): void {
     const tagName = `${pluginName.toLowerCase().replace(/\s+/g, "-")}-v${version.toString()}`
 
     log.info(`Creating git tag: ${tagName}`)
@@ -298,7 +306,7 @@ function createGitTag(pluginName: string, version: number, repoRoot: string, env
             // Tag doesn't exist, that's fine
         }
 
-        const escapedChangelog = env.CHANGELOG.trim().replace(/'/g, "'\\''")
+        const escapedChangelog = changelog.trim().replace(/'/g, "'\\''")
         execSync(`git tag -a "${tagName}" -m "${escapedChangelog}"`, {
             cwd: repoRoot,
             stdio: "inherit",
@@ -332,14 +340,15 @@ interface SlackWorkflowPayload {
 async function sendSlackNotification(
     framerJson: FramerJson,
     submissionResult: SubmissionResponse,
-    env: Environment
+    env: Environment,
+    changelog: string
 ): Promise<void> {
     const payload: SlackWorkflowPayload = {
         pluginName: framerJson.name,
         pluginVersion: submissionResult.version.toString(),
         marketplacePreviewUrl: `${getURL(env, "marketplaceBaseUrl")}/plugins/${submissionResult.slug}/preview`,
         pluginReviewUrl: `${getURL(env, "framerAppUrl")}/projects/new?plugin=${submissionResult.internalPluginId}&pluginVersion=${submissionResult.versionId}`,
-        changelog: env.CHANGELOG,
+        changelog,
         retoolUrl: env.RETOOL_URL,
     }
 
@@ -413,6 +422,16 @@ async function main(): Promise<void> {
             throw new Error(`Plugin path does not exist: ${env.PLUGIN_PATH}`)
         }
 
+        // Resolve changelog from CHANGELOG or PR_BODY
+        log.step("Resolving Changelog")
+        let changelog = env.CHANGELOG
+        if (!changelog && env.PR_BODY) {
+            changelog = extractChangelog(env.PR_BODY) ?? undefined
+        }
+        if (!changelog) {
+            throw new Error("No changelog provided. Set CHANGELOG or PR_BODY with a ### Changelog section.")
+        }
+
         log.step("Loading Plugin Info")
         framerJson = loadFramerJsonFile(env.PLUGIN_PATH)
         log.info(`Name: ${framerJson.name}`)
@@ -438,7 +457,7 @@ async function main(): Promise<void> {
         log.info(`Found plugin with ID: ${plugin.id}`)
 
         log.step("Changelog")
-        log.info(`Changelog:\n${env.CHANGELOG}`)
+        log.info(`Changelog:\n${changelog}`)
 
         log.step("Building & Packing Plugin")
 
@@ -455,19 +474,19 @@ async function main(): Promise<void> {
         if (env.DRY_RUN) {
             log.step("DRY RUN - Skipping Submission")
             log.info("Plugin is built and packed. Would submit to API in real run.")
-            log.info(`Would submit with changelog:\n${env.CHANGELOG}`)
+            log.info(`Would submit with changelog:\n${changelog}`)
             return
         }
 
         log.step("Submitting to Framer API")
-        const submissionResult = await submitPlugin(zipFilePath, plugin, env)
+        const submissionResult = await submitPlugin(zipFilePath, plugin, env, changelog)
 
         log.step("Creating Git Tag")
-        createGitTag(framerJson.name, submissionResult.version, repoRoot, env)
+        createGitTag(framerJson.name, submissionResult.version, repoRoot, changelog)
 
         if (env.SLACK_WEBHOOK_URL) {
             log.step("Sending Slack Notification")
-            await sendSlackNotification(framerJson, submissionResult, env)
+            await sendSlackNotification(framerJson, submissionResult, env, changelog)
         }
 
         console.log("\n" + "=".repeat(60))
