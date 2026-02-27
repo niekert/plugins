@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Environment } from "./env"
-import { parseGithubToSlackMap, resolveMergedBySlackMention } from "./slack"
+import { parseGithubToSlackMap, resolveSlackUserMention } from "./slack"
 
 function createEnvironment(overrides: Partial<Environment> = {}): Environment {
     return {
@@ -24,13 +24,13 @@ function createEnvironment(overrides: Partial<Environment> = {}): Environment {
 }
 
 describe("parseGithubToSlackMap", () => {
-    it("parses and normalizes github and slack handles", () => {
-        const mapping = parseGithubToSlackMap("  @Niek : niek ; alice:@alice.dev; bot:bot-helper;")
+    it("parses and normalizes github handles with slack member IDs", () => {
+        const mapping = parseGithubToSlackMap("  @Niek : U0646CHP4UB ; alice:uW1ab23cd ; bot:u03abcde12;")
 
         expect(mapping).toEqual({
-            niek: "@niek",
-            alice: "@alice.dev",
-            bot: "@bot-helper",
+            niek: "U0646CHP4UB",
+            alice: "UW1AB23CD",
+            bot: "U03ABCDE12",
         })
     })
 
@@ -39,40 +39,69 @@ describe("parseGithubToSlackMap", () => {
         expect(() => parseGithubToSlackMap("niek:")).toThrow("Invalid GH_TO_SLACK_MAP entry")
         expect(() => parseGithubToSlackMap(":@niek")).toThrow("Invalid GH_TO_SLACK_MAP entry")
         expect(() => parseGithubToSlackMap("a:b:c")).toThrow("Invalid GH_TO_SLACK_MAP entry")
-        expect(() => parseGithubToSlackMap("niek:<@U123456>")).toThrow("Invalid GH_TO_SLACK_MAP entry")
-        expect(() => parseGithubToSlackMap("niek:invalid handle")).toThrow("Invalid GH_TO_SLACK_MAP entry")
+        expect(() => parseGithubToSlackMap("niek:<@U0646CHP4UB>")).toThrow("Invalid GH_TO_SLACK_MAP entry")
+        expect(() => parseGithubToSlackMap("niek:@niek")).toThrow("Invalid GH_TO_SLACK_MAP entry")
+    })
+
+    it("parses a real mapping", () => {
+        const mapping = parseGithubToSlackMap(
+            "niekert:U0646CHP4UB;triozer:U07TMMYABJL;kaloyanvi:U05PD1NLZEG;madebyisaacr:U08RN09CNQZ;elmarburke:U08QGPJLSV7;tom-james-watson:U05UNC42N74;huntercaron:UM1GY93D2;nick-lucas:U09V83C34HJ;johannes-ger:U08HT3M3NCF"
+        )
+
+        expect(mapping).toEqual({
+            niekert: "U0646CHP4UB",
+            triozer: "U07TMMYABJL",
+            kaloyanvi: "U05PD1NLZEG",
+            madebyisaacr: "U08RN09CNQZ",
+            elmarburke: "U08QGPJLSV7",
+            "tom-james-watson": "U05UNC42N74",
+            huntercaron: "UM1GY93D2",
+            "nick-lucas": "U09V83C34HJ",
+            "johannes-ger": "U08HT3M3NCF",
+        })
     })
 })
 
-describe("resolveMergedBySlackMention", () => {
-    it("resolves mapped handle with normalization", () => {
-        const mention = resolveMergedBySlackMention(
+describe("resolveSlackUserMention", () => {
+    it("resolves mapped member IDs with normalization", () => {
+        const mention = resolveSlackUserMention(
             createEnvironment({
                 MERGED_BY_GITHUB_HANDLE: "@NiEk",
-                GH_TO_SLACK_MAP: "niek:marketplace.niek",
+                GH_TO_SLACK_MAP: "niek:U0646CHP4UB",
             })
         )
 
-        expect(mention).toBe("@marketplace.niek")
+        expect(mention).toBe("U0646CHP4UB")
     })
 
     it("accepts GH_TO_SLACK_MAP values with a trailing semicolon", () => {
-        const mention = resolveMergedBySlackMention(
+        const mention = resolveSlackUserMention(
             createEnvironment({
                 MERGED_BY_GITHUB_HANDLE: "niek",
-                GH_TO_SLACK_MAP: "niek:@marketplace.niek;",
+                GH_TO_SLACK_MAP: "niek:U0646CHP4UB;",
             })
         )
 
-        expect(mention).toBe("@marketplace.niek")
+        expect(mention).toBe("U0646CHP4UB")
+    })
+
+    it("resolves mapped member IDs directly", () => {
+        const mention = resolveSlackUserMention(
+            createEnvironment({
+                MERGED_BY_GITHUB_HANDLE: "niek",
+                GH_TO_SLACK_MAP: "niek:UC6B12Z4N",
+            })
+        )
+
+        expect(mention).toBe("UC6B12Z4N")
     })
 
     it("falls back when handle is missing or unmapped", () => {
-        const withoutHandle = resolveMergedBySlackMention(createEnvironment())
-        const unmappedHandle = resolveMergedBySlackMention(
+        const withoutHandle = resolveSlackUserMention(createEnvironment())
+        const unmappedHandle = resolveSlackUserMention(
             createEnvironment({
                 MERGED_BY_GITHUB_HANDLE: "someone-else",
-                GH_TO_SLACK_MAP: "niek:@niek",
+                GH_TO_SLACK_MAP: "niek:U0646CHP4UB",
             })
         )
 
@@ -81,10 +110,10 @@ describe("resolveMergedBySlackMention", () => {
     })
 
     it("uses custom fallback mention when provided", () => {
-        const mention = resolveMergedBySlackMention(
+        const mention = resolveSlackUserMention(
             createEnvironment({
                 MERGED_BY_GITHUB_HANDLE: "missing-user",
-                GH_TO_SLACK_MAP: "niek:@niek",
+                GH_TO_SLACK_MAP: "niek:U0646CHP4UB",
                 SLACK_FALLBACK_MENTION: "@marketplace-oncall",
             })
         )
@@ -93,10 +122,10 @@ describe("resolveMergedBySlackMention", () => {
     })
 
     it("normalizes custom fallback mention without @", () => {
-        const mention = resolveMergedBySlackMention(
+        const mention = resolveSlackUserMention(
             createEnvironment({
                 MERGED_BY_GITHUB_HANDLE: "missing-user",
-                GH_TO_SLACK_MAP: "niek:@niek",
+                GH_TO_SLACK_MAP: "niek:U0646CHP4UB",
                 SLACK_FALLBACK_MENTION: "marketplace-oncall",
             })
         )
@@ -104,8 +133,20 @@ describe("resolveMergedBySlackMention", () => {
         expect(mention).toBe("@marketplace-oncall")
     })
 
+    it("supports fallback member IDs", () => {
+        const mention = resolveSlackUserMention(
+            createEnvironment({
+                MERGED_BY_GITHUB_HANDLE: "missing-user",
+                GH_TO_SLACK_MAP: "niek:U0646CHP4UB",
+                SLACK_FALLBACK_MENTION: "UC6B12Z4N",
+            })
+        )
+
+        expect(mention).toBe("UC6B12Z4N")
+    })
+
     it("falls back when the mapping string is invalid", () => {
-        const mention = resolveMergedBySlackMention(
+        const mention = resolveSlackUserMention(
             createEnvironment({
                 MERGED_BY_GITHUB_HANDLE: "niek",
                 GH_TO_SLACK_MAP: "broken-entry",
@@ -114,5 +155,4 @@ describe("resolveMergedBySlackMention", () => {
 
         expect(mention).toBe("@team-plugins")
     })
-
 })

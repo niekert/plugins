@@ -42,7 +42,7 @@ on:
         required: false
         type: string
       gh_to_slack_map:
-        description: 'Semicolon-separated "github:slack" map for merged-by mentions'
+        description: 'Semicolon-separated "github:slack_user_id" map for merged-by mentions'
         required: false
         type: string
       slack_fallback_mention:
