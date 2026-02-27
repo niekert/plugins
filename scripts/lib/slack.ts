@@ -13,7 +13,6 @@ interface SlackWorkflowPayload {
     slackUserMention: string
 }
 
-const DEFAULT_SLACK_FALLBACK_MENTION = "@team-plugins"
 const SLACK_USER_ID_PATTERN = /^U[A-Z0-9]{8,}$/i
 
 function normalizeGithubHandle(handle: string): string {
@@ -26,14 +25,6 @@ function normalizeSlackUserId(userId: string): string {
 
 function isValidSlackUserId(userId: string): boolean {
     return SLACK_USER_ID_PATTERN.test(userId.trim())
-}
-
-function normalizeFallbackMention(fallback: string): string {
-    const trimmed = fallback.trim()
-    if (isValidSlackUserId(trimmed)) {
-        return normalizeSlackUserId(trimmed)
-    }
-    return trimmed.startsWith("@") ? trimmed : `@${trimmed}`
 }
 
 export function parseGithubToSlackMap(mapString: string): Record<string, string> {
@@ -70,34 +61,31 @@ export function parseGithubToSlackMap(mapString: string): Record<string, string>
 }
 
 export function resolveSlackUserMention(env: Environment): string {
-    const fallbackMentionInput = env.SLACK_FALLBACK_MENTION.trim()
-    const fallbackMention = fallbackMentionInput
-        ? normalizeFallbackMention(fallbackMentionInput)
-        : DEFAULT_SLACK_FALLBACK_MENTION
+    const fallbackUserId = normalizeSlackUserId(env.SLACK_FALLBACK_USER_ID)
     const mergedByGithubHandle = env.MERGED_BY_GITHUB_HANDLE
     if (!mergedByGithubHandle) {
-        log.info(`Slack user resolution: github=(missing), resolved=${fallbackMention} (fallback)`)
-        return fallbackMention
+        log.info(`Slack user resolution: github=(missing), resolved=${fallbackUserId} (fallback)`)
+        return fallbackUserId
     }
 
     const normalizedHandle = normalizeGithubHandle(mergedByGithubHandle)
     if (!normalizedHandle) {
-        log.info(`Slack user resolution: github=(empty), resolved=${fallbackMention} (fallback)`)
-        return fallbackMention
+        log.info(`Slack user resolution: github=(empty), resolved=${fallbackUserId} (fallback)`)
+        return fallbackUserId
     }
 
     const mapString = env.GH_TO_SLACK_MAP?.trim()
     if (!mapString) {
         log.info(
-            `Slack user resolution: github=${normalizedHandle}, mapped=(none, GH_TO_SLACK_MAP unset), resolved=${fallbackMention} (fallback)`
+            `Slack user resolution: github=${normalizedHandle}, mapped=(none, GH_TO_SLACK_MAP unset), resolved=${fallbackUserId} (fallback)`
         )
-        return fallbackMention
+        return fallbackUserId
     }
 
     try {
         const mapping = parseGithubToSlackMap(mapString)
         const mappedMention = mapping[normalizedHandle]
-        const resolvedMention = mappedMention ?? fallbackMention
+        const resolvedMention = mappedMention ?? fallbackUserId
         log.info(
             `Slack user resolution: github=${normalizedHandle}, mapped=${mappedMention ?? "(none)"}, resolved=${resolvedMention}`
         )
@@ -105,9 +93,9 @@ export function resolveSlackUserMention(env: Environment): string {
     } catch (err) {
         log.error(`Invalid GH_TO_SLACK_MAP: ${err instanceof Error ? err.message : String(err)}`)
         log.info(
-            `Slack user resolution: github=${normalizedHandle}, mapped=(invalid map), resolved=${fallbackMention} (fallback)`
+            `Slack user resolution: github=${normalizedHandle}, mapped=(invalid map), resolved=${fallbackUserId} (fallback)`
         )
-        return fallbackMention
+        return fallbackUserId
     }
 }
 

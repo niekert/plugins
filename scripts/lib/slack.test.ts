@@ -11,7 +11,7 @@ function createEnvironment(overrides: Partial<Environment> = {}): Environment {
         SLACK_ERROR_WEBHOOK_URL: undefined,
         MERGED_BY_GITHUB_HANDLE: undefined,
         GH_TO_SLACK_MAP: undefined,
-        SLACK_FALLBACK_MENTION: "@team-plugins",
+        SLACK_FALLBACK_USER_ID: "U999999999",
         RETOOL_URL: undefined,
         GITHUB_RUN_URL: undefined,
         FRAMER_ENV: "production",
@@ -105,32 +105,32 @@ describe("resolveSlackUserMention", () => {
             })
         )
 
-        expect(withoutHandle).toBe("@team-plugins")
-        expect(unmappedHandle).toBe("@team-plugins")
+        expect(withoutHandle).toBe("U999999999")
+        expect(unmappedHandle).toBe("U999999999")
     })
 
-    it("uses custom fallback mention when provided", () => {
+    it("uses custom fallback user ID when provided", () => {
         const mention = resolveSlackUserMention(
             createEnvironment({
                 MERGED_BY_GITHUB_HANDLE: "missing-user",
                 GH_TO_SLACK_MAP: "niek:U0646CHP4UB",
-                SLACK_FALLBACK_MENTION: "@marketplace-oncall",
+                SLACK_FALLBACK_USER_ID: "U123456789",
             })
         )
 
-        expect(mention).toBe("@marketplace-oncall")
+        expect(mention).toBe("U123456789")
     })
 
-    it("normalizes custom fallback mention without @", () => {
+    it("normalizes custom fallback user ID casing", () => {
         const mention = resolveSlackUserMention(
             createEnvironment({
                 MERGED_BY_GITHUB_HANDLE: "missing-user",
                 GH_TO_SLACK_MAP: "niek:U0646CHP4UB",
-                SLACK_FALLBACK_MENTION: "marketplace-oncall",
+                SLACK_FALLBACK_USER_ID: "u123abc456",
             })
         )
 
-        expect(mention).toBe("@marketplace-oncall")
+        expect(mention).toBe("U123ABC456")
     })
 
     it("supports fallback member IDs", () => {
@@ -138,7 +138,7 @@ describe("resolveSlackUserMention", () => {
             createEnvironment({
                 MERGED_BY_GITHUB_HANDLE: "missing-user",
                 GH_TO_SLACK_MAP: "niek:U0646CHP4UB",
-                SLACK_FALLBACK_MENTION: "UC6B12Z4N",
+                SLACK_FALLBACK_USER_ID: "UC6B12Z4N",
             })
         )
 
@@ -153,6 +153,6 @@ describe("resolveSlackUserMention", () => {
             })
         )
 
-        expect(mention).toBe("@team-plugins")
+        expect(mention).toBe("U999999999")
     })
 })

@@ -45,8 +45,8 @@ on:
         description: 'Semicolon-separated "github:slack_user_id" map for merged-by mentions'
         required: false
         type: string
-      slack_fallback_mention:
-        description: 'Fallback Slack mention when merged-by mapping is missing'
+      slack_fallback_user_id:
+        description: 'Fallback Slack user ID when merged-by mapping is missing'
         required: false
         type: string
       environment:
@@ -159,7 +159,7 @@ jobs:
           SLACK_ERROR_WEBHOOK_URL: ${{ secrets.SLACK_ERROR_WEBHOOK_URL }}
           MERGED_BY_GITHUB_HANDLE: ${{ github.actor }}
           GH_TO_SLACK_MAP: ${{ inputs.gh_to_slack_map || vars.GH_TO_SLACK_MAP }}
-          SLACK_FALLBACK_MENTION: ${{ inputs.slack_fallback_mention || vars.SLACK_FALLBACK_MENTION }}
+          SLACK_FALLBACK_USER_ID: ${{ inputs.slack_fallback_user_id || vars.SLACK_FALLBACK_USER_ID }}
           RETOOL_URL: ${{ secrets.RETOOL_URL }}
           FRAMER_ENV: ${{ inputs.environment }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

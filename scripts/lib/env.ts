@@ -1,6 +1,10 @@
 import * as v from "valibot"
 
 export const FramerEnvSchema = v.picklist(["production", "development"])
+export const SlackUserIdSchema = v.pipe(
+    v.string(),
+    v.regex(/^U[A-Z0-9]{8,}$/i, 'Expected a Slack user ID starting with "U" (for example "U0646CHP4UB").')
+)
 
 export const BooleanEnvSchema = v.pipe(
     v.optional(v.string(), "false"),
@@ -15,7 +19,7 @@ export const EnvSchema = v.object({
     SLACK_ERROR_WEBHOOK_URL: v.optional(v.string()),
     MERGED_BY_GITHUB_HANDLE: v.optional(v.string()),
     GH_TO_SLACK_MAP: v.optional(v.string()),
-    SLACK_FALLBACK_MENTION: v.optional(v.string(), "@team-plugins"),
+    SLACK_FALLBACK_USER_ID: SlackUserIdSchema,
     RETOOL_URL: v.optional(v.string()),
     GITHUB_RUN_URL: v.optional(v.string()),
     FRAMER_ENV: v.optional(FramerEnvSchema, "production"),

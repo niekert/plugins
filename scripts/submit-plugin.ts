@@ -18,7 +18,7 @@
  *   MERGED_BY_GITHUB_HANDLE - GitHub username of person who merged/dispatched the run (optional)
  *   GH_TO_SLACK_MAP     - Semicolon-separated "github:slack_user_id" mappings (optional)
  *                         Example: "niek:U0646CHP4UB;alice:U0123456789"
- *   SLACK_FALLBACK_MENTION - Slack fallback value used when mapping misses (default: @team-plugins)
+ *   SLACK_FALLBACK_USER_ID - Slack fallback user ID used when mapping misses (required, example: U0646CHP4UB)
  *   RETOOL_URL          - Retool dashboard URL for Slack notifications (optional)
  *   GITHUB_RUN_URL      - GitHub Actions run URL for error notifications (optional)
  *   FRAMER_ENV          - Environment: "production" or "development" (default: production)
