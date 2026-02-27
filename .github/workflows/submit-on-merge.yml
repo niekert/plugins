@@ -56,6 +56,9 @@ jobs:
           FRAMER_ADMIN_SECRET: ${{ secrets.FRAMER_ADMIN_SECRET }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_ERROR_WEBHOOK_URL: ${{ secrets.SLACK_ERROR_WEBHOOK_URL }}
+          MERGED_BY_GITHUB_HANDLE: ${{ github.event.pull_request.merged_by.login }}
+          GH_TO_SLACK_MAP: ${{ vars.GH_TO_SLACK_MAP }}
+          SLACK_FALLBACK_MENTION: ${{ vars.SLACK_FALLBACK_MENTION }}
           RETOOL_URL: ${{ secrets.RETOOL_URL }}
           FRAMER_ENV: production
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
