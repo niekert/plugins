@@ -99,7 +99,7 @@ jobs:
       - name: Checkout tooling
         uses: actions/checkout@v4
         with:
-          repository: framer/plugins
+          repository: niekert/plugins
           ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || '' }}
           path: tooling
 
