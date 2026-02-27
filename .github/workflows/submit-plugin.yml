@@ -41,14 +41,6 @@ on:
         description: 'Full PR body — changelog will be extracted (mutually exclusive with changelog)'
         required: false
         type: string
-      gh_to_slack_map:
-        description: 'Semicolon-separated "github:slack_user_id" map for merged-by mentions'
-        required: false
-        type: string
-      slack_fallback_user_id:
-        description: 'Fallback Slack user ID when merged-by mapping is missing'
-        required: false
-        type: string
       environment:
         description: 'Environment (development/production)'
         required: true
@@ -158,8 +150,8 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_ERROR_WEBHOOK_URL: ${{ secrets.SLACK_ERROR_WEBHOOK_URL }}
           MERGED_BY_GITHUB_HANDLE: ${{ github.actor }}
-          GH_TO_SLACK_MAP: ${{ inputs.gh_to_slack_map || vars.GH_TO_SLACK_MAP }}
-          SLACK_FALLBACK_USER_ID: ${{ inputs.slack_fallback_user_id || vars.SLACK_FALLBACK_USER_ID }}
+          GH_TO_SLACK_MAP: ${{ vars.GH_TO_SLACK_MAP }}
+          SLACK_FALLBACK_USER_ID: ${{ vars.SLACK_FALLBACK_USER_ID }}
           RETOOL_URL: ${{ secrets.RETOOL_URL }}
           FRAMER_ENV: ${{ inputs.environment }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
